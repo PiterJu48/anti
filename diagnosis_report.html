@@ -116,39 +116,82 @@
         async function loadReport() {
             const urlParams = new URLSearchParams(window.location.search);
             const id = urlParams.get('id');
+            const type = urlParams.get('type') || 'diagnosis'; // diagnosis or official
+            
             if (!id) return alert('잘못된 접근입니다.');
 
-            const { data, error } = await db.from('diagnosis_results').select('*').eq('id', id).single();
+            const tableName = type === 'official' ? 'evaluation_reports' : 'diagnosis_results';
+            const { data, error } = await db.from(tableName)
+                .select(type === 'official' ? '*, farms(name)' : '*')
+                .eq('id', id)
+                .single();
+            
             if (error) return alert('보고서를 불러오는 데 실패했습니다.');
 
             document.getElementById('reportDate').innerText = '진단 일시: ' + new Date(data.created_at).toLocaleString();
             document.getElementById('res_score').innerText = data.score + '%';
-            document.getElementById('res_user').innerText = data.user_id + ' 님';
-            document.getElementById('res_y').innerText = data.compliant_count;
-            document.getElementById('res_n').innerText = data.non_compliant_count;
+            
+            if (type === 'official') {
+                document.getElementById('res_user').innerText = data.farms ? data.farms.name : '알수없음';
+                document.getElementById('res_comment').innerText = data.summary || '종합 의견이 없습니다.';
+            } else {
+                document.getElementById('res_user').innerText = data.user_id + ' 님';
+                
+                let message = '';
+                if (data.score === 100) message = '축하합니다! 모든 동물복지 기준을 충족하고 있습니다. 지금 바로 인증 신청을 고려해 보세요.';
+                else if (data.score >= 80) message = '아주 훌륭한 복지 수준입니다. 부적합 항목을 보완하시면 충분히 인증을 획득할 수 있습니다.';
+                else if (data.score >= 50) message = '보통 수준의 복지 환경입니다. 일부 항목의 개선이 필요합니다.';
+                else message = '동물복지 수준 개선이 시급합니다. 전문가의 컨설팅을 받아보시는 것을 추천합니다.';
+                document.getElementById('res_comment').innerText = message;
+            }
 
-            let message = '';
-            if (data.score === 100) message = '축하합니다! 모든 동물복지 기준을 충족하고 있습니다. 지금 바로 인증 신청을 고려해 보세요.';
-            else if (data.score >= 80) message = '아주 훌륭한 복지 수준입니다. 부적합 항목을 보완하시면 충분히 인증을 획득할 수 있습니다.';
-            else if (data.score >= 50) message = '보통 수준의 복지 환경입니다. 일부 항목의 개선이 필요합니다.';
-            else message = '동물복지 수준 개선이 시급합니다. 전문가의 컨설팅을 받아보시는 것을 추천합니다.';
-            document.getElementById('res_comment').innerText = message;
+            // 적합/부적합 통계 계산 (official은 compliant_count가 없을 수 있으므로 details 기반 계산)
+            let compliantCount = 0;
+            let nonCompliantCount = 0;
+
+            if (type === 'official') {
+                Object.values(data.details).forEach(val => {
+                    if (val.status === 'Y') compliantCount++;
+                    else if (val.status === 'N') nonCompliantCount++;
+                });
+            } else {
+                compliantCount = data.compliant_count;
+                nonCompliantCount = data.non_compliant_count;
+            }
+
+            document.getElementById('res_y').innerText = compliantCount;
+            document.getElementById('res_n').innerText = nonCompliantCount;
 
             // 상세 내역 매핑을 위해 평가항목 다시 로드
             const { data: items } = await db.from('evaluation_items').select('id, large_item, small_item, standard').order('id', { ascending: true });
             
             const detailContainer = document.getElementById('res_details');
             detailContainer.innerHTML = items.map(item => {
-                const status = data.details[item.id] || 'N';
+                let status = 'NA';
+                let comment = '';
+                
+                if (type === 'official') {
+                    const detail = data.details[item.id];
+                    status = detail ? detail.status : 'NA';
+                    comment = detail ? detail.comment : '';
+                } else {
+                    status = data.details[item.id] || 'N';
+                }
+
+                if (status === 'NA') return ''; // 공식 평가에서 NA는 제외하거나 다르게 표시 가능
+
                 return `
-                    <div class="detail-item">
-                        <div style="flex: 1;">
-                            <div style="font-weight: 600; font-size: 0.9rem;">${item.large_item} ${item.small_item ? '- ' + item.small_item : ''}</div>
-                            <div style="font-size: 0.8rem; color: #666;">${item.standard}</div>
+                    <div class="detail-item" style="flex-direction: column; align-items: flex-start;">
+                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; font-size: 0.9rem;">${item.large_item} ${item.small_item ? '- ' + item.small_item : ''}</div>
+                                <div style="font-size: 0.8rem; color: #666;">${item.standard}</div>
+                            </div>
+                            <div class="${status === 'Y' ? 'status-y' : 'status-n'}">
+                                ${status === 'Y' ? '적합' : (status === 'N' ? '부적합' : 'N/A')}
+                            </div>
                         </div>
-                        <div class="${status === 'Y' ? 'status-y' : 'status-n'}">
-                            ${status === 'Y' ? '적합' : '부적합'}
-                        </div>
+                        ${comment ? `<div style="font-size: 0.8rem; background: #fff5f5; padding: 5px 10px; border-radius: 4px; margin-top: 5px; width: 100%;">의견: ${comment}</div>` : ''}
                     </div>
                 `;
             }).join('');

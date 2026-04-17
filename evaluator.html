@@ -20,13 +20,13 @@
             </div>
             <ul class="nav-menu">
                 <li class="nav-item">
-                    <a href="#" class="nav-link active"><i class="fas fa-calendar-check"></i> 배정된 평가 목록</a>
+                    <a href="#" class="nav-link active" onclick="showTab('assigned')"><i class="fas fa-calendar-check"></i> 배정된 평가 목록</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link"><i class="fas fa-file-invoice"></i> 평가 보고서 작성</a>
+                    <a href="#" class="nav-link" onclick="showTab('report')"><i class="fas fa-file-invoice"></i> 평가 보고서 작성</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link"><i class="fas fa-archive"></i> 과거 평가 이력</a>
+                    <a href="#" class="nav-link" onclick="showTab('history')"><i class="fas fa-archive"></i> 과거 평가 이력</a>
                 </li>
             </ul>
             <div class="user-profile" style="margin-top: auto; padding-top: 20px; border-top: 1px solid #eee;">
@@ -38,52 +38,112 @@
         <!-- 메인 콘텐츠 -->
         <main class="main-content">
             <header class="header">
-                <h1>평가자 대시보드</h1>
+                <h1 id="pageTitle">평가자 대시보드</h1>
                 <div class="user-info">
                     <button class="logout-btn" onclick="window.auth.logout()">로그아웃</button>
                 </div>
             </header>
 
-            <section class="card" style="margin-bottom: 25px; border-left: 5px solid var(--accent-color);">
-                <h3><i class="fas fa-exclamation-triangle"></i> 금주 예정 현장평가</h3>
-                <p style="margin-top: 10px;">총 <strong>2건</strong>의 현장 방문 평가가 예정되어 있습니다.</p>
-            </section>
+            <!-- 배정된 평가 목록 탭 -->
+            <div id="assignedTab" class="tab-content">
+                <section class="card" style="margin-bottom: 25px; border-left: 5px solid var(--accent-color);">
+                    <h3><i class="fas fa-exclamation-triangle"></i> 금주 예정 현장평가</h3>
+                    <p style="margin-top: 10px;">총 <strong>2건</strong>의 현장 방문 평가가 예정되어 있습니다.</p>
+                </section>
 
-            <section class="mt-20">
-                <div class="card" style="width: 100%;">
-                    <h3><i class="fas fa-clipboard-list"></i> 진행 중인 평가 작업</h3>
-                    <table class="data-table">
+                <section class="mt-20">
+                    <div class="card" style="width: 100%;">
+                        <h3><i class="fas fa-clipboard-list"></i> 진행 중인 평가 작업</h3>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>대상 농장</th>
+                                    <th>소재지</th>
+                                    <th>평가 유형</th>
+                                    <th>평가 일시</th>
+                                    <th>상태</th>
+                                    <th>작업</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>푸른들 농장</td>
+                                    <td>경기도 이천시</td>
+                                    <td>신규 인증</td>
+                                    <td>2024-04-18 10:00</td>
+                                    <td><span class="status-badge status-pending">방문 예정</span></td>
+                                    <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="showTab('report')">보고서 작성</button></td>
+                                </tr>
+                                <tr>
+                                    <td>행복돈사</td>
+                                    <td>충청남도 홍성군</td>
+                                    <td>정기 연장</td>
+                                    <td>2024-04-20 14:00</td>
+                                    <td><span class="status-badge status-pending">방문 예정</span></td>
+                                    <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="showTab('report')">보고서 작성</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- 평가 보고서 작성 탭 -->
+            <div id="reportTab" class="tab-content" style="display: none;">
+                <section class="card">
+                    <div id="reportStep1">
+                        <h3><i class="fas fa-file-invoice"></i> 신규 평가 보고서 작성</h3>
+                        <div class="form-group" style="margin-top: 20px; max-width: 400px;">
+                            <label>평가 대상 농장 선택</label>
+                            <select id="targetFarm" style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; margin-top: 10px;">
+                                <option value="">농장을 선택하세요</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" style="margin-top: 20px;" onclick="startOfficialEvaluation()">평가 시작하기</button>
+                    </div>
+
+                    <div id="reportStep2" style="display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #eee;">
+                            <h3 id="currentFarmName">농장명</h3>
+                            <button class="logout-btn" onclick="cancelEvaluation()">취소</button>
+                        </div>
+                        
+                        <div id="officialEvalItemsContainer">
+                            <!-- 평가항목 로드 -->
+                        </div>
+
+                        <div class="card" style="margin-top: 30px; background: #fffaf0;">
+                            <h4><i class="fas fa-pen-nib"></i> 종합 평가 의견</h4>
+                            <textarea id="overallSummary" style="width: 100%; height: 100px; margin-top: 10px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px;" placeholder="농장의 전반적인 복지 상태 및 개선 권고 사항을 입력하세요."></textarea>
+                        </div>
+
+                        <div style="margin-top: 30px; text-align: center;">
+                            <button class="btn-primary" style="padding: 15px 60px; font-size: 1.1rem;" onclick="submitOfficialEvaluation()">평가 보고서 최종 제출</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- 과거 평가 이력 탭 -->
+            <div id="historyTab" class="tab-content" style="display: none;">
+                <section class="card">
+                    <h3><i class="fas fa-archive"></i> 완료된 평가 보고서</h3>
+                    <table class="data-table mt-20">
                         <thead>
                             <tr>
+                                <th>제출 일시</th>
                                 <th>대상 농장</th>
-                                <th>소재지</th>
-                                <th>평가 유형</th>
-                                <th>평가 일시</th>
+                                <th>점수</th>
                                 <th>상태</th>
                                 <th>작업</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <tr>
-                                <td>푸른들 농장</td>
-                                <td>경기도 이천시</td>
-                                <td>신규 인증</td>
-                                <td>2024-04-18 10:00</td>
-                                <td><span class="status-badge status-pending">방문 예정</span></td>
-                                <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;">보고서 작성</button></td>
-                            </tr>
-                            <tr>
-                                <td>행복돈사</td>
-                                <td>충청남도 홍성군</td>
-                                <td>정기 연장</td>
-                                <td>2024-04-20 14:00</td>
-                                <td><span class="status-badge status-pending">방문 예정</span></td>
-                                <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;">보고서 작성</button></td>
-                            </tr>
+                        <tbody id="officialHistoryList">
+                            <!-- 데이터 로드 -->
                         </tbody>
                     </table>
-                </div>
-            </section>
+                </section>
+            </div>
 
             <section class="mt-20 card-grid">
                 <div class="card">
@@ -91,13 +151,208 @@
                     <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">2024년도 개정된 동물복지 축산농장 인증기준 해설서입니다.</p>
                     <button class="btn-primary" style="background: var(--text-muted);">매뉴얼 보기</button>
                 </div>
-            </div>
+            </section>
         </main>
     </div>
 
     <script>
-        window.auth.checkAuth('evaluator');
-        document.getElementById('userNameDisplay').innerText = localStorage.getItem('user_id') + '님';
+        // 페이지 로드 시 권한 체크 및 초기화
+        document.addEventListener('DOMContentLoaded', () => {
+            window.auth.checkAuth('evaluator');
+            const userName = localStorage.getItem('user_name') || localStorage.getItem('user_id') || '평가원';
+            document.getElementById('userNameDisplay').innerText = userName + '님';
+            
+            // 초기 탭 활성화
+            showTab('assigned');
+        });
+        
+        const db = window.auth.supabase;
+
+        function showTab(tabName) {
+            console.log('Showing tab:', tabName);
+            // 모든 탭 숨기기
+            document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+            
+            // 대상 탭 표시
+            const targetTab = document.getElementById(tabName + 'Tab');
+            if (targetTab) {
+                targetTab.style.display = 'block';
+            } else {
+                console.error('Tab not found:', tabName + 'Tab');
+            }
+            
+            // 사이드바 메뉴 활성화 상태 변경
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                const onclickAttr = link.getAttribute('onclick');
+                if (onclickAttr && onclickAttr.includes(`'${tabName}'`)) {
+                    link.classList.add('active');
+                }
+            });
+
+            // 페이지 타이틀 변경 및 데이터 로드
+            const titleMap = {
+                'assigned': '배정된 평가 목록',
+                'report': '평가 보고서 작성',
+                'history': '과거 평가 이력'
+            };
+            
+            if (document.getElementById('pageTitle')) {
+                document.getElementById('pageTitle').innerText = titleMap[tabName] || '평가자 대시보드';
+            }
+
+            if (tabName === 'report') {
+                loadFarms();
+            } else if (tabName === 'history') {
+                loadOfficialHistory();
+            }
+        }
+
+        async function loadFarms() {
+            try {
+                const { data, error } = await db.from('farms').select('*');
+                if (error) throw error;
+                
+                const select = document.getElementById('targetFarm');
+                if (select) {
+                    select.innerHTML = '<option value="">농장을 선택하세요</option>' + 
+                        data.map(f => `<option value="${f.id}">${f.name} (${f.owner})</option>`).join('');
+                }
+                
+                if (document.getElementById('reportStep1')) document.getElementById('reportStep1').style.display = 'block';
+                if (document.getElementById('reportStep2')) document.getElementById('reportStep2').style.display = 'none';
+            } catch (err) {
+                console.error('Error loading farms:', err);
+            }
+        }
+
+        async function startOfficialEvaluation() {
+            const farmId = document.getElementById('targetFarm').value;
+            if (!farmId) return alert('농장을 선택해 주세요.');
+
+            const farmSelect = document.getElementById('targetFarm');
+            const farmName = farmSelect.options[farmSelect.selectedIndex].text;
+            document.getElementById('currentFarmName').innerText = '평가 대상: ' + farmName;
+            
+            document.getElementById('reportStep1').style.display = 'none';
+            document.getElementById('reportStep2').style.display = 'block';
+
+            try {
+                const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
+                if (error) throw error;
+
+                const container = document.getElementById('officialEvalItemsContainer');
+                const grouped = data.reduce((acc, item) => {
+                    if (!acc[item.section]) acc[item.section] = [];
+                    acc[item.section].push(item);
+                    return acc;
+                }, {});
+
+                container.innerHTML = Object.keys(grouped).map(section => `
+                    <div class="section-group" style="margin-bottom: 30px;">
+                        <h4 style="background: #f8fafc; padding: 12px 20px; border-left: 5px solid var(--primary-color); margin-bottom: 15px; font-size: 1.1rem;">${section}</h4>
+                        ${grouped[section].map(item => `
+                            <div class="card" style="margin-bottom: 15px; padding: 20px; border: 1px solid #edf2f7;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: 700; color: #2d3748; margin-bottom: 5px;">${item.large_item} ${item.small_item ? '- ' + item.small_item : ''}</div>
+                                        <div style="font-size: 0.9rem; color: #4a5568; margin-bottom: 10px;">${item.standard}</div>
+                                        <div style="font-size: 0.85rem; color: #718096; font-style: italic;">적합 기준: ${item.compliance_criteria}</div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 10px; min-width: 150px;">
+                                        <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
+                                            <label style="cursor: pointer;"><input type="radio" name="off_item_${item.id}" value="Y" required> 적합</label>
+                                            <label style="cursor: pointer;"><input type="radio" name="off_item_${item.id}" value="N"> 부적합</label>
+                                            <label style="cursor: pointer;"><input type="radio" name="off_item_${item.id}" value="NA"> N/A</label>
+                                        </div>
+                                        <input type="text" id="off_comm_${item.id}" placeholder="평가 의견 입력" style="width: 100%; padding: 5px; border: 1px solid #eee; font-size: 0.8rem;">
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Error starting evaluation:', err);
+                alert('평가 항목을 불러오는 중 오류가 발생했습니다.');
+            }
+        }
+
+        async function submitOfficialEvaluation() {
+            const farmId = document.getElementById('targetFarm').value;
+            const container = document.getElementById('officialEvalItemsContainer');
+            const radios = container.querySelectorAll('input[type="radio"]:checked');
+            const allItems = container.querySelectorAll('.card');
+
+            if (radios.length < allItems.length) return alert('모든 항목에 대해 평가를 완료해 주세요.');
+
+            let compliant = 0;
+            let totalTarget = 0;
+            let details = {};
+
+            radios.forEach(radio => {
+                const itemId = radio.name.replace('off_item_', '');
+                const comment = document.getElementById('off_comm_' + itemId).value;
+                details[itemId] = { status: radio.value, comment: comment };
+                
+                if (radio.value === 'Y') {
+                    compliant++;
+                    totalTarget++;
+                } else if (radio.value === 'N') {
+                    totalTarget++;
+                }
+            });
+
+            const score = totalTarget > 0 ? Math.round((compliant / totalTarget) * 100) : 0;
+            const evaluatorId = localStorage.getItem('user_id');
+            const summary = document.getElementById('overallSummary').value;
+
+            try {
+                const { error } = await db.from('evaluation_reports').insert({
+                    farm_id: farmId,
+                    evaluator_id: evaluatorId,
+                    score: score,
+                    summary: summary,
+                    details: details
+                });
+
+                if (error) throw error;
+
+                alert('평가 보고서가 성공적으로 제출되었습니다.');
+                showTab('assigned');
+            } catch (err) {
+                console.error('Error submitting evaluation:', err);
+                alert('보고서 제출 중 오류가 발생했습니다.');
+            }
+        }
+
+        async function loadOfficialHistory() {
+            try {
+                const { data, error } = await db.from('evaluation_reports').select('*, farms(name)').order('created_at', { ascending: false });
+                if (error) throw error;
+
+                const list = document.getElementById('officialHistoryList');
+                if (list) {
+                    list.innerHTML = data.map(item => `
+                        <tr>
+                            <td>${new Date(item.created_at).toLocaleString()}</td>
+                            <td>${item.farms ? item.farms.name : '알수없음'}</td>
+                            <td style="font-weight: 700;">${item.score}%</td>
+                            <td><span class="status-badge status-completed">제출완료</span></td>
+                            <td><button class="logout-btn" style="padding: 4px 8px;" onclick="window.open('diagnosis_report.html?id=${item.id}&type=official', '_blank', 'width=1000,height=800')">보고서</button></td>
+                        </tr>
+                    `).join('') || '<tr><td colspan="5" style="text-align:center; padding:20px;">제출된 보고서가 없습니다.</td></tr>';
+                }
+            } catch (err) {
+                console.error('Error loading history:', err);
+            }
+        }
+
+        function cancelEvaluation() {
+            if (confirm('평가를 중단하시겠습니까? 입력된 내용은 저장되지 않습니다.')) {
+                showTab('report');
+            }
+        }
     </script>
 </body>
 </html>
