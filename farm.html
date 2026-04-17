@@ -152,15 +152,19 @@
         window.auth.checkAuth('farm');
         document.getElementById('userNameDisplay').innerText = (localStorage.getItem('user_name') || localStorage.getItem('user_id')) + '님';
         
-        const _supabase = window.auth.supabase;
+        // 전역 _supabase와 충돌을 피하기 위해 db로 명칭 변경
+        const db = window.auth.supabase;
 
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
-            document.getElementById(tabName + 'Tab').style.display = 'block';
+            const targetTab = document.getElementById(tabName + 'Tab');
+            if (targetTab) targetTab.style.display = 'block';
             
             document.querySelectorAll('.nav-link').forEach(link => {
                 link.classList.remove('active');
-                if (link.onclick.toString().includes(`'${tabName}'`)) link.classList.add('active');
+                if (link.getAttribute('onclick') && link.getAttribute('onclick').includes(`'${tabName}'`)) {
+                    link.classList.add('active');
+                }
             });
 
             if (tabName === 'dashboard') document.getElementById('pageTitle').innerText = '농장주 대시보드';
@@ -180,7 +184,7 @@
             document.getElementById('diagnosisIntroduction').style.display = 'none';
             document.getElementById('diagnosisContent').style.display = 'block';
             
-            const { data, error } = await _supabase.from('evaluation_items').select('*').order('id', { ascending: true });
+            const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
             if (error) return alert('평가항목을 불러오는 데 실패했습니다.');
 
             const container = document.getElementById('evalItemsContainer');
