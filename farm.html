@@ -20,16 +20,16 @@
             </div>
             <ul class="nav-menu">
                 <li class="nav-item">
-                    <a href="#" class="nav-link active"><i class="fas fa-home"></i> 내 농장 정보</a>
+                    <a href="#" class="nav-link active" onclick="showTab('dashboard')"><i class="fas fa-home"></i> 내 농장 정보</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link"><i class="fas fa-file-signature"></i> 인증 신청하기</a>
+                    <a href="#" class="nav-link" onclick="showTab('apply')"><i class="fas fa-file-signature"></i> 인증 신청하기</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link"><i class="fas fa-tasks"></i> 자가 진단 서비스</a>
+                    <a href="#" class="nav-link" onclick="showTab('diagnosis')"><i class="fas fa-tasks"></i> 자가 진단 서비스</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link"><i class="fas fa-history"></i> 신청 이력 확인</a>
+                    <a href="#" class="nav-link" onclick="showTab('history')"><i class="fas fa-history"></i> 신청 이력 확인</a>
                 </li>
             </ul>
             <div class="user-profile" style="margin-top: auto; padding-top: 20px; border-top: 1px solid #eee;">
@@ -41,69 +41,215 @@
         <!-- 메인 콘텐츠 -->
         <main class="main-content">
             <header class="header">
-                <h1>농장주 대시보드</h1>
+                <h1 id="pageTitle">농장주 대시보드</h1>
                 <div class="user-info">
                     <button class="logout-btn" onclick="window.auth.logout()">로그아웃</button>
                 </div>
             </header>
 
-            <section class="card" style="margin-bottom: 25px;">
-                <h3><i class="fas fa-info-circle"></i> 현재 인증 상태</h3>
-                <div style="display: flex; align-items: center; gap: 20px; margin-top: 10px;">
-                    <div style="background: #e6fffa; color: #2c7a7b; padding: 15px 30px; border-radius: 8px; font-weight: 700; font-size: 1.2rem;">
-                        인증 유지 중
+            <!-- 대시보드 탭 -->
+            <div id="dashboardTab" class="tab-content">
+                <section class="card" style="margin-bottom: 25px;">
+                    <h3><i class="fas fa-info-circle"></i> 현재 인증 상태</h3>
+                    <div style="display: flex; align-items: center; gap: 20px; margin-top: 10px;">
+                        <div style="background: #e6fffa; color: #2c7a7b; padding: 15px 30px; border-radius: 8px; font-weight: 700; font-size: 1.2rem;">
+                            인증 유지 중
+                        </div>
+                        <div>
+                            <p style="font-size: 0.9rem; color: #666;">차기 정기 평가 예정일: 2024-10-15</p>
+                            <p style="font-size: 0.8rem; color: #999;">마지막 현장 평가: 2023-10-20 (박민준 평가원)</p>
+                        </div>
                     </div>
-                    <div>
-                        <p style="font-size: 0.9rem; color: #666;">차기 정기 평가 예정일: 2024-10-15</p>
-                        <p style="font-size: 0.8rem; color: #999;">마지막 현장 평가: 2023-10-20 (박민준 평가원)</p>
+                </section>
+
+                <section class="card-grid">
+                    <div class="card">
+                        <h3><i class="fas fa-edit"></i> 자가 진단</h3>
+                        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">평가 전 우리 농장의 복지 수준을 미리 점검해 보세요.</p>
+                        <button class="btn-primary" onclick="showTab('diagnosis')">자가진단 시작</button>
                     </div>
-                </div>
-            </section>
+                    <div class="card">
+                        <h3><i class="fas fa-file-download"></i> 인증서 재발급</h3>
+                        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">유효한 동물복지 인증서를 PDF로 다운로드 합니다.</p>
+                        <button class="btn-primary" style="background-color: var(--secondary-color);">인증서 다운로드</button>
+                    </div>
+                </section>
 
-            <section class="card-grid">
-                <div class="card">
-                    <h3><i class="fas fa-edit"></i> 자가 진단</h3>
-                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">평가 전 우리 농장의 복지 수준을 미리 점검해 보세요.</p>
-                    <button class="btn-primary">자가진단 시작</button>
-                </div>
-                <div class="card">
-                    <h3><i class="fas fa-file-download"></i> 인증서 재발급</h3>
-                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">유효한 동물복지 인증서를 PDF로 다운로드 합니다.</p>
-                    <button class="btn-primary" style="background-color: var(--secondary-color);">인증서 다운로드</button>
-                </div>
-            </section>
+                <section class="mt-20">
+                    <div class="card" style="width: 100%;">
+                        <h3><i class="fas fa-list"></i> 최근 신청 이력</h3>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>접수번호</th>
+                                    <th>신청구분</th>
+                                    <th>축종</th>
+                                    <th>처리상태</th>
+                                    <th>완료일자</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>REQ-2023-08</td>
+                                    <td>정기 연장</td>
+                                    <td>산란계</td>
+                                    <td><span class="status-badge status-completed">완료</span></td>
+                                    <td>2023-10-25</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
 
-            <section class="mt-20">
-                <div class="card" style="width: 100%;">
-                    <h3><i class="fas fa-list"></i> 최근 신청 이력</h3>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>접수번호</th>
-                                <th>신청구분</th>
-                                <th>축종</th>
-                                <th>처리상태</th>
-                                <th>완료일자</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>REQ-2023-08</td>
-                                <td>정기 연장</td>
-                                <td>산란계</td>
-                                <td><span class="status-badge status-completed">완료</span></td>
-                                <td>2023-10-25</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+            <!-- 자가 진단 서비스 탭 -->
+            <div id="diagnosisTab" class="tab-content" style="display: none;">
+                <section class="card">
+                    <div id="diagnosisIntroduction">
+                        <h3><i class="fas fa-tasks"></i> 자가 진단 서비스</h3>
+                        <p style="margin: 15px 0; line-height: 1.6;">동물복지인증 공식 평가항목을 바탕으로 농장에서 직접 점검할 수 있는 서비스입니다.<br>각 항목에 대해 적합 여부를 체크해 주세요.</p>
+                        <button class="btn-primary" onclick="startDiagnosis()">진단 시작하기</button>
+                    </div>
+
+                    <div id="diagnosisContent" style="display: none;">
+                        <div id="evalItemsContainer">
+                            <!-- 항목들이 여기에 로드됨 -->
+                        </div>
+                        <div style="margin-top: 30px; text-align: center;">
+                            <button class="btn-primary" style="padding: 15px 50px; font-size: 1.1rem;" onclick="calculateDiagnosis()">진단 결과 보기</button>
+                        </div>
+                    </div>
+
+                    <!-- 진단 결과 화면 -->
+                    <div id="diagnosisResult" style="display: none;">
+                        <div style="text-align: center; padding: 40px; border: 1px solid var(--border-color); border-radius: 12px; background: #f8fafc;">
+                            <h2 style="color: var(--primary-color); margin-bottom: 20px;">자가 진단 결과</h2>
+                            <div style="font-size: 3rem; font-weight: 800; margin-bottom: 20px;" id="resultScore">0 %</div>
+                            <p id="resultMessage" style="font-size: 1.1rem; color: #444; margin-bottom: 30px;"></p>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 500px; margin: 0 auto;">
+                                <div class="card" style="padding: 15px;">
+                                    <h4 style="color: #2c7a7b;">적합 항목</h4>
+                                    <div id="compliantCount" style="font-size: 1.5rem; font-weight: 700;">0</div>
+                                </div>
+                                <div class="card" style="padding: 15px;">
+                                    <h4 style="color: #c53030;">부적합 항목</h4>
+                                    <div id="nonCompliantCount" style="font-size: 1.5rem; font-weight: 700;">0</div>
+                                </div>
+                            </div>
+                            <button class="btn-primary" style="margin-top: 40px;" onclick="showTab('diagnosis')">다시 진단하기</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- 다른 탭 (빈 공간) -->
+            <div id="applyTab" class="tab-content" style="display: none;"><section class="card"><h3>인증 신청하기</h3><p>준비 중입니다.</p></section></div>
+            <div id="historyTab" class="tab-content" style="display: none;"><section class="card"><h3>신청 이력 확인</h3><p>준비 중입니다.</p></section></div>
         </main>
     </div>
 
     <script>
         window.auth.checkAuth('farm');
-        document.getElementById('userNameDisplay').innerText = localStorage.getItem('user_id') + '님';
+        document.getElementById('userNameDisplay').innerText = (localStorage.getItem('user_name') || localStorage.getItem('user_id')) + '님';
+        
+        const _supabase = window.auth.supabase;
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+            document.getElementById(tabName + 'Tab').style.display = 'block';
+            
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.onclick.toString().includes(`'${tabName}'`)) link.classList.add('active');
+            });
+
+            if (tabName === 'dashboard') document.getElementById('pageTitle').innerText = '농장주 대시보드';
+            if (tabName === 'diagnosis') {
+                document.getElementById('pageTitle').innerText = '자가 진단 서비스';
+                resetDiagnosis();
+            }
+        }
+
+        function resetDiagnosis() {
+            document.getElementById('diagnosisIntroduction').style.display = 'block';
+            document.getElementById('diagnosisContent').style.display = 'none';
+            document.getElementById('diagnosisResult').style.display = 'none';
+        }
+
+        async function startDiagnosis() {
+            document.getElementById('diagnosisIntroduction').style.display = 'none';
+            document.getElementById('diagnosisContent').style.display = 'block';
+            
+            const { data, error } = await _supabase.from('evaluation_items').select('*').order('id', { ascending: true });
+            if (error) return alert('평가항목을 불러오는 데 실패했습니다.');
+
+            const container = document.getElementById('evalItemsContainer');
+            const grouped = data.reduce((acc, item) => {
+                if (!acc[item.section]) acc[item.section] = [];
+                acc[item.section].push(item);
+                return acc;
+            }, {});
+
+            container.innerHTML = Object.keys(grouped).map(section => `
+                <div class="section-group" style="margin-bottom: 30px;">
+                    <h4 style="background: #f8fafc; padding: 12px 20px; border-left: 5px solid var(--primary-color); margin-bottom: 15px; font-size: 1.1rem;">${section}</h4>
+                    ${grouped[section].map(item => `
+                        <div class="card" style="margin-bottom: 15px; padding: 20px; border: 1px solid #edf2f7;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 700; color: #2d3748; margin-bottom: 5px;">${item.large_item} ${item.small_item ? '- ' + item.small_item : ''}</div>
+                                    <div style="font-size: 0.9rem; color: #4a5568; margin-bottom: 10px;">${item.standard}</div>
+                                    <div style="font-size: 0.85rem; color: #718096; font-style: italic;">적합 기준: ${item.compliance_criteria}</div>
+                                </div>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                        <input type="radio" name="item_${item.id}" value="Y" required> 적합
+                                    </label>
+                                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                        <input type="radio" name="item_${item.id}" value="N"> 부적합
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `).join('');
+        }
+
+        function calculateDiagnosis() {
+            const container = document.getElementById('evalItemsContainer');
+            const radios = container.querySelectorAll('input[type="radio"]:checked');
+            const allItems = container.querySelectorAll('.card');
+
+            if (radios.length < allItems.length) {
+                alert('모든 항목에 대해 체크해 주세요.');
+                return;
+            }
+
+            let compliant = 0;
+            let nonCompliant = 0;
+
+            radios.forEach(radio => {
+                if (radio.value === 'Y') compliant++;
+                else nonCompliant++;
+            });
+
+            const score = Math.round((compliant / allItems.length) * 100);
+            
+            document.getElementById('diagnosisContent').style.display = 'none';
+            document.getElementById('diagnosisResult').style.display = 'block';
+            document.getElementById('resultScore').innerText = score + ' %';
+            document.getElementById('compliantCount').innerText = compliant;
+            document.getElementById('nonCompliantCount').innerText = nonCompliant;
+
+            let message = '';
+            if (score === 100) message = '축하합니다! 모든 동물복지 기준을 충족하고 있습니다. 지금 바로 인증 신청을 고려해 보세요.';
+            else if (score >= 80) message = '아주 훌륭한 복지 수준입니다. 부적합 항목을 보완하시면 충분히 인증을 획득할 수 있습니다.';
+            else if (score >= 50) message = '보통 수준의 복지 환경입니다. 일부 항목의 개선이 필요합니다.';
+            else message = '동물복지 수준 개선이 시급합니다. 전문가의 컨설팅을 받아보시는 것을 추천합니다.';
+
+            document.getElementById('resultMessage').innerText = message;
+        }
     </script>
 </body>
 </html>
