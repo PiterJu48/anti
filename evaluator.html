@@ -12,6 +12,9 @@
 </head>
 <body>
     <div class="dashboard-layout">
+        <!-- 사이드바 오버레이 -->
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
         <!-- 사이드바 -->
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -38,7 +41,10 @@
         <!-- 메인 콘텐츠 -->
         <main class="main-content">
             <header class="header">
-                <h1 id="pageTitle">평가자 대시보드</h1>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+                    <h1 id="pageTitle">평가자 대시보드</h1>
+                </div>
                 <div class="user-info">
                     <button class="logout-btn" onclick="window.auth.logout()">로그아웃</button>
                 </div>
@@ -54,36 +60,38 @@
                 <section class="mt-20">
                     <div class="card" style="width: 100%;">
                         <h3><i class="fas fa-clipboard-list"></i> 진행 중인 평가 작업</h3>
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>대상 농장</th>
-                                    <th>소재지</th>
-                                    <th>평가 유형</th>
-                                    <th>평가 일시</th>
-                                    <th>상태</th>
-                                    <th>작업</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>푸른들 농장</td>
-                                    <td>경기도 이천시</td>
-                                    <td>신규 인증</td>
-                                    <td>2024-04-18 10:00</td>
-                                    <td><span class="status-badge status-pending">방문 예정</span></td>
-                                    <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="showTab('report')">보고서 작성</button></td>
-                                </tr>
-                                <tr>
-                                    <td>행복돈사</td>
-                                    <td>충청남도 홍성군</td>
-                                    <td>정기 연장</td>
-                                    <td>2024-04-20 14:00</td>
-                                    <td><span class="status-badge status-pending">방문 예정</span></td>
-                                    <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="showTab('report')">보고서 작성</button></td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>대상 농장</th>
+                                        <th>소재지</th>
+                                        <th>평가 유형</th>
+                                        <th>평가 일시</th>
+                                        <th>상태</th>
+                                        <th>작업</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>푸른들 농장</td>
+                                        <td>경기도 이천시</td>
+                                        <td>신규 인증</td>
+                                        <td>2024-04-18 10:00</td>
+                                        <td><span class="status-badge status-pending">방문 예정</span></td>
+                                        <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="showTab('report')">보고서 작성</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td>행복돈사</td>
+                                        <td>충청남도 홍성군</td>
+                                        <td>정기 연장</td>
+                                        <td>2024-04-20 14:00</td>
+                                        <td><span class="status-badge status-pending">방문 예정</span></td>
+                                        <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="showTab('report')">보고서 작성</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -128,20 +136,22 @@
             <div id="historyTab" class="tab-content" style="display: none;">
                 <section class="card">
                     <h3><i class="fas fa-archive"></i> 완료된 평가 보고서</h3>
-                    <table class="data-table mt-20">
-                        <thead>
-                            <tr>
-                                <th>제출 일시</th>
-                                <th>대상 농장</th>
-                                <th>점수</th>
-                                <th>상태</th>
-                                <th>작업</th>
-                            </tr>
-                        </thead>
-                        <tbody id="officialHistoryList">
-                            <!-- 데이터 로드 -->
-                        </tbody>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="data-table mt-20">
+                            <thead>
+                                <tr>
+                                    <th>제출 일시</th>
+                                    <th>대상 농장</th>
+                                    <th>점수</th>
+                                    <th>상태</th>
+                                    <th>작업</th>
+                                </tr>
+                            </thead>
+                            <tbody id="officialHistoryList">
+                                <!-- 데이터 로드 -->
+                            </tbody>
+                        </table>
+                    </div>
                 </section>
             </div>
 
@@ -168,8 +178,20 @@
         
         const db = window.auth.supabase;
 
+        // 사이드바 토글
+        function toggleSidebar() {
+            document.querySelector('.sidebar').classList.toggle('active');
+            document.getElementById('sidebarOverlay').classList.toggle('active');
+        }
+
         function showTab(tabName) {
             console.log('Showing tab:', tabName);
+            // 모바일에서 탭 클릭 시 사이드바 닫기
+            if (window.innerWidth <= 1024) {
+                document.querySelector('.sidebar').classList.remove('active');
+                document.getElementById('sidebarOverlay').classList.remove('active');
+            }
+
             // 모든 탭 숨기기
             document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
             
@@ -259,13 +281,13 @@
                                         <div style="font-size: 0.9rem; color: #4a5568; margin-bottom: 10px;">${item.standard}</div>
                                         <div style="font-size: 0.85rem; color: #718096; font-style: italic;">적합 기준: ${item.compliance_criteria}</div>
                                     </div>
-                                    <div style="display: flex; flex-direction: column; gap: 10px; min-width: 150px;">
-                                        <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
+                                    <div style="display: flex; flex-direction: column; gap: 10px; min-width: 150px; width: 100%;">
+                                        <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-wrap: wrap;">
                                             <label style="cursor: pointer;"><input type="radio" name="off_item_${item.id}" value="Y" required> 적합</label>
                                             <label style="cursor: pointer;"><input type="radio" name="off_item_${item.id}" value="N"> 부적합</label>
                                             <label style="cursor: pointer;"><input type="radio" name="off_item_${item.id}" value="NA"> N/A</label>
                                         </div>
-                                        <input type="text" id="off_comm_${item.id}" placeholder="평가 의견 입력" style="width: 100%; padding: 5px; border: 1px solid #eee; font-size: 0.8rem;">
+                                        <input type="text" id="off_comm_${item.id}" placeholder="평가 의견 입력" style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem;">
                                     </div>
                                 </div>
                             </div>

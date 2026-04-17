@@ -12,6 +12,9 @@
 </head>
 <body>
     <div class="dashboard-layout">
+        <!-- 사이드바 오버레이 -->
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
         <!-- 사이드바 -->
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -41,7 +44,10 @@
         <!-- 메인 콘텐츠 -->
         <main class="main-content">
             <header class="header">
-                <h1 id="pageTitle">농장주 대시보드</h1>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+                    <h1 id="pageTitle">농장주 대시보드</h1>
+                </div>
                 <div class="user-info">
                     <button class="logout-btn" onclick="window.auth.logout()">로그아웃</button>
                 </div>
@@ -78,26 +84,28 @@
                 <section class="mt-20">
                     <div class="card" style="width: 100%;">
                         <h3><i class="fas fa-list"></i> 최근 신청 이력</h3>
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>접수번호</th>
-                                    <th>신청구분</th>
-                                    <th>축종</th>
-                                    <th>처리상태</th>
-                                    <th>완료일자</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>REQ-2023-08</td>
-                                    <td>정기 연장</td>
-                                    <td>산란계</td>
-                                    <td><span class="status-badge status-completed">완료</span></td>
-                                    <td>2023-10-25</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>접수번호</th>
+                                        <th>신청구분</th>
+                                        <th>축종</th>
+                                        <th>처리상태</th>
+                                        <th>완료일자</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>REQ-2023-08</td>
+                                        <td>정기 연장</td>
+                                        <td>산란계</td>
+                                        <td><span class="status-badge status-completed">완료</span></td>
+                                        <td>2023-10-25</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -133,7 +141,7 @@
                             <h2 style="color: var(--primary-color); margin-bottom: 20px;">자가 진단 결과</h2>
                             <div style="font-size: 3rem; font-weight: 800; margin-bottom: 20px;" id="resultScore">0 %</div>
                             <p id="resultMessage" style="font-size: 1.1rem; color: #444; margin-bottom: 30px;"></p>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 500px; margin: 0 auto;">
+                            <div class="card-grid" style="max-width: 500px; margin: 0 auto;">
                                 <div class="card" style="padding: 15px;">
                                     <h4 style="color: #2c7a7b;">적합 항목</h4>
                                     <div id="compliantCount" style="font-size: 1.5rem; font-weight: 700;">0</div>
@@ -150,20 +158,22 @@
                     <!-- 과거 이력 리스트 -->
                     <div id="diagnosisHistory" style="display: none;">
                         <h3><i class="fas fa-history"></i> 과거 자가 진단 이력</h3>
-                        <table class="data-table mt-20">
-                            <thead>
-                                <tr>
-                                    <th>진단 일시</th>
-                                    <th>점수</th>
-                                    <th>적합</th>
-                                    <th>부적합</th>
-                                    <th>상세</th>
-                                </tr>
-                            </thead>
-                            <tbody id="diagnosisHistoryList">
-                                <!-- 데이터 로드 -->
-                            </tbody>
-                        </table>
+                        <div class="table-responsive">
+                            <table class="data-table mt-20">
+                                <thead>
+                                    <tr>
+                                        <th>진단 일시</th>
+                                        <th>점수</th>
+                                        <th>적합</th>
+                                        <th>부적합</th>
+                                        <th>상세</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="diagnosisHistoryList">
+                                    <!-- 데이터 로드 -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -181,7 +191,19 @@
         // 전역 _supabase와 충돌을 피하기 위해 db로 명칭 변경
         const db = window.auth.supabase;
 
+        // 사이드바 토글
+        function toggleSidebar() {
+            document.querySelector('.sidebar').classList.toggle('active');
+            document.getElementById('sidebarOverlay').classList.toggle('active');
+        }
+
         function showTab(tabName) {
+            // 모바일에서 탭 클릭 시 사이드바 닫기
+            if (window.innerWidth <= 1024) {
+                document.querySelector('.sidebar').classList.remove('active');
+                document.getElementById('sidebarOverlay').classList.remove('active');
+            }
+
             document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
             const targetTab = document.getElementById(tabName + 'Tab');
             if (targetTab) targetTab.style.display = 'block';
