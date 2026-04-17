@@ -213,13 +213,15 @@
         window.auth.checkAuth('admin');
         document.getElementById('userNameDisplay').innerText = localStorage.getItem('user_id') + '님';
         
-        const _supabase = window.auth.supabase;
+        // 전역 _supabase와 충돌을 피하기 위해 db로 명칭 변경
+        const db = window.auth.supabase;
 
         // 탭 전환 기능
         function showTab(tabName) {
             const tabs = ['dashboard', 'users', 'farms'];
             tabs.forEach(t => {
-                document.getElementById(t + 'Tab').style.display = (t === tabName) ? 'block' : 'none';
+                const el = document.getElementById(t + 'Tab');
+                if (el) el.style.display = (t === tabName) ? 'block' : 'none';
             });
             
             // 메뉴 활성화 상태 변경
@@ -231,7 +233,8 @@
             });
 
             const titleMap = { 'dashboard': '관리자 대시보드', 'users': '사용자(계정) 관리', 'farms': '농장 관리' };
-            document.getElementById('pageTitle').innerText = titleMap[tabName];
+            const pageTitle = document.getElementById('pageTitle');
+            if (pageTitle) pageTitle.innerText = titleMap[tabName];
 
             if (tabName === 'farms') fetchFarms();
             if (tabName === 'users') fetchUsers();
@@ -239,7 +242,7 @@
 
         // 사용자 데이터 로드
         async function fetchUsers() {
-            const { data, error } = await _supabase.from('profiles').select('*');
+            const { data, error } = await db.from('profiles').select('*');
             if (error) return console.error(error);
             
             const list = document.getElementById('userList');
@@ -258,7 +261,7 @@
 
         // 농장 데이터 로드 (기존 로직 유지)
         async function fetchFarms() {
-            const { data, error } = await _supabase.from('farms').select('*').order('created_at', { ascending: false });
+            const { data, error } = await db.from('farms').select('*').order('created_at', { ascending: false });
             if (error) return console.error(error);
             renderFarms(data);
         }
@@ -305,7 +308,7 @@
 
         async function deleteFarm(id) {
             if (confirm('정말 삭제하시겠습니까?')) {
-                const { error } = await _supabase
+                const { error } = await db
                     .from('farms')
                     .delete()
                     .eq('id', id);
@@ -333,14 +336,14 @@
             let error;
             if (id) {
                 // 수정
-                const { error: updateError } = await _supabase
+                const { error: updateError } = await db
                     .from('farms')
                     .update(farmData)
                     .eq('id', id);
                 error = updateError;
             } else {
                 // 신규
-                const { error: insertError } = await _supabase
+                const { error: insertError } = await db
                     .from('farms')
                     .insert([farmData]);
                 error = insertError;
