@@ -13,6 +13,14 @@ def import_data():
     current_section = "일반기준"
     
     try:
+        # 1. 기존 데이터 삭제
+        delete_req = urllib.request.Request(URL + "?id=gt.0", method='DELETE')
+        delete_req.add_header("apikey", KEY)
+        delete_req.add_header("Authorization", f"Bearer {KEY}")
+        with urllib.request.urlopen(delete_req) as response:
+            print(f"Existing data deleted. Status: {response.status}")
+
+        # 2. 새로운 데이터 읽기
         # 한국어 엑셀 CSV는 보통 cp949(ANSI) 인코딩임
         with open(CSV_FILE, mode='r', encoding='cp949') as f:
             reader = csv.reader(f)
@@ -26,7 +34,6 @@ def import_data():
                     continue
                 
                 # 데이터 매핑 (A:0, B:1, C:2, F:5, G:6)
-                # 실제 CSV 인덱스는 확인이 필요하지만 사용자의 가이드를 따름
                 try:
                     large_item = row[0].strip()
                     small_item = row[1].strip() if len(row) > 1 else ""
@@ -48,7 +55,7 @@ def import_data():
                 except IndexError:
                     continue
                     
-        # Supabase에 데이터 전송 (Bulk Insert)
+        # 3. Supabase에 데이터 전송 (Bulk Insert)
         if items:
             data = json.dumps(items).encode('utf-8')
             req = urllib.request.Request(URL, data=data, method='POST')

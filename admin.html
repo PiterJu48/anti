@@ -160,20 +160,9 @@
                         <h3><i class="fas fa-tasks"></i> 평가항목 관리</h3>
                         <button class="btn-primary" onclick="openEvalItemModal()"><i class="fas fa-plus"></i> 신규 항목 추가</button>
                     </div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>섹션</th>
-                                <th>대항목</th>
-                                <th>소항목</th>
-                                <th>평가기준</th>
-                                <th>적합기준</th>
-                                <th>결과</th>
-                                <th>관리</th>
-                            </tr>
-                        </thead>
-                        <tbody id="evalItemList"></tbody>
-                    </table>
+                    <div id="evalItemListContainer">
+                        <!-- 섹션별 그룹화된 테이블이 여기에 동적으로 생성됨 -->
+                    </div>
                 </section>
             </div>
 
@@ -185,8 +174,10 @@
                         <input type="hidden" id="evalItemId">
                         <div class="form-grid">
                             <div class="form-group">
-                                <label>섹션 (예: □ 일반기준)</label>
-                                <input type="text" id="ei_section" required>
+                                <label>섹션 선택</label>
+                                <select id="ei_section" required style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                    <!-- JS로 섹션 목록 삽입 -->
+                                </select>
                             </div>
                             <div class="form-group">
                                 <label>대항목</label>
@@ -350,20 +341,50 @@
             const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
             if (error) return console.error(error);
             
-            const list = document.getElementById('evalItemList');
-            list.innerHTML = data.map(item => `
-                <tr>
-                    <td style="font-size: 0.85rem;">${item.section}</td>
-                    <td style="font-weight: 500;">${item.large_item}</td>
-                    <td>${item.small_item || '-'}</td>
-                    <td style="font-size: 0.8rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.standard}</td>
-                    <td style="font-size: 0.8rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.compliance_criteria}</td>
-                    <td>${item.result || '-'}</td>
-                    <td>
-                        <button class="logout-btn" style="padding: 4px 8px;" onclick="editEvalItem(${JSON.stringify(item).replace(/"/g, '&quot;')})">수정</button>
-                        <button class="logout-btn" style="padding: 4px 8px; color: red;" onclick="deleteEvalItem(${item.id})">삭제</button>
-                    </td>
-                </tr>
+            // 섹션 목록 추출 (드롭다운용)
+            const uniqueSections = [...new Set(data.map(item => item.section))];
+            const sectionSelect = document.getElementById('ei_section');
+            sectionSelect.innerHTML = uniqueSections.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            // 섹션별 그룹화
+            const grouped = data.reduce((acc, item) => {
+                if (!acc[item.section]) acc[item.section] = [];
+                acc[item.section].push(item);
+                return acc;
+            }, {});
+
+            const container = document.getElementById('evalItemListContainer');
+            container.innerHTML = Object.keys(grouped).map(section => `
+                <div class="section-group" style="margin-bottom: 30px;">
+                    <h4 style="background: #f8fafc; padding: 10px 15px; border-left: 4px solid var(--primary-color); margin-bottom: 10px;">${section}</h4>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 15%;">대항목</th>
+                                <th style="width: 15%;">소항목</th>
+                                <th>평가기준</th>
+                                <th>적합기준</th>
+                                <th style="width: 8%;">결과</th>
+                                <th style="width: 10%;">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${grouped[section].map(item => `
+                                <tr>
+                                    <td style="font-weight: 500;">${item.large_item}</td>
+                                    <td>${item.small_item || '-'}</td>
+                                    <td style="font-size: 0.8rem; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.standard}</td>
+                                    <td style="font-size: 0.8rem; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.compliance_criteria}</td>
+                                    <td>${item.result || '-'}</td>
+                                    <td>
+                                        <button class="logout-btn" style="padding: 4px 8px;" onclick="editEvalItem(${JSON.stringify(item).replace(/"/g, '&quot;')})">수정</button>
+                                        <button class="logout-btn" style="padding: 4px 8px; color: red;" onclick="deleteEvalItem(${item.id})">삭제</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
             `).join('');
         }
 
