@@ -190,10 +190,6 @@
                                 <label>소항목</label>
                                 <input type="text" id="ei_small">
                             </div>
-                            <div class="form-group">
-                                <label>평가결과 구분</label>
-                                <input type="text" id="ei_result" placeholder="예: 적합/부적합">
-                            </div>
                         </div>
                         <div class="form-group" style="margin-top: 15px;">
                             <label>평가 기준 (C열)</label>
@@ -372,7 +368,6 @@
                                 <th style="width: 15%;">소항목</th>
                                 <th>평가기준</th>
                                 <th>적합기준</th>
-                                <th style="width: 8%;">결과</th>
                                 <th style="width: 10%;">관리</th>
                             </tr>
                         </thead>
@@ -383,7 +378,6 @@
                                     <td>${item.small_item || '-'}</td>
                                     <td style="font-size: 0.8rem; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.standard}</td>
                                     <td style="font-size: 0.8rem; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.compliance_criteria}</td>
-                                    <td>${item.result || '-'}</td>
                                     <td>
                                         <button class="logout-btn" style="padding: 4px 8px;" onclick="editEvalItem(${JSON.stringify(item).replace(/"/g, '&quot;')})">수정</button>
                                         <button class="logout-btn" style="padding: 4px 8px; color: red;" onclick="deleteEvalItem(${item.id})">삭제</button>
@@ -415,7 +409,6 @@
             document.getElementById('ei_small').value = item.small_item || '';
             document.getElementById('ei_standard').value = item.standard;
             document.getElementById('ei_compliance').value = item.compliance_criteria;
-            document.getElementById('ei_result').value = item.result || '';
             
             document.getElementById('evalItemModal').style.display = 'block';
         }
@@ -436,8 +429,7 @@
                 large_item: document.getElementById('ei_large').value,
                 small_item: document.getElementById('ei_small').value,
                 standard: document.getElementById('ei_standard').value,
-                compliance_criteria: document.getElementById('ei_compliance').value,
-                result: document.getElementById('ei_result').value
+                compliance_criteria: document.getElementById('ei_compliance').value
             };
 
             let error;
