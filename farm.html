@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>농장주 모드 | 동물복지인증 평가 시스템</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="auth.js"></script>
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- 사이드바 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>농림축산식품부</h2>
+                <p style="font-size: 0.8rem; color: #666;">동물복지인증 시스템</p>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active"><i class="fas fa-home"></i> 내 농장 정보</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link"><i class="fas fa-file-signature"></i> 인증 신청하기</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link"><i class="fas fa-tasks"></i> 자가 진단 서비스</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link"><i class="fas fa-history"></i> 신청 이력 확인</a>
+                </li>
+            </ul>
+            <div class="user-profile" style="margin-top: auto; padding-top: 20px; border-top: 1px solid #eee;">
+                <p id="userNameDisplay" style="font-weight: 500;"></p>
+                <p style="font-size: 0.8rem; color: #666;">농장 경영주</p>
+            </div>
+        </aside>
+
+        <!-- 메인 콘텐츠 -->
+        <main class="main-content">
+            <header class="header">
+                <h1>농장주 대시보드</h1>
+                <div class="user-info">
+                    <button class="logout-btn" onclick="window.auth.logout()">로그아웃</button>
+                </div>
+            </header>
+
+            <section class="card" style="margin-bottom: 25px;">
+                <h3><i class="fas fa-info-circle"></i> 현재 인증 상태</h3>
+                <div style="display: flex; align-items: center; gap: 20px; margin-top: 10px;">
+                    <div style="background: #e6fffa; color: #2c7a7b; padding: 15px 30px; border-radius: 8px; font-weight: 700; font-size: 1.2rem;">
+                        인증 유지 중
+                    </div>
+                    <div>
+                        <p style="font-size: 0.9rem; color: #666;">차기 정기 평가 예정일: 2024-10-15</p>
+                        <p style="font-size: 0.8rem; color: #999;">마지막 현장 평가: 2023-10-20 (박민준 평가원)</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card-grid">
+                <div class="card">
+                    <h3><i class="fas fa-edit"></i> 자가 진단</h3>
+                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">평가 전 우리 농장의 복지 수준을 미리 점검해 보세요.</p>
+                    <button class="btn-primary">자가진단 시작</button>
+                </div>
+                <div class="card">
+                    <h3><i class="fas fa-file-download"></i> 인증서 재발급</h3>
+                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">유효한 동물복지 인증서를 PDF로 다운로드 합니다.</p>
+                    <button class="btn-primary" style="background-color: var(--secondary-color);">인증서 다운로드</button>
+                </div>
+            </section>
+
+            <section class="mt-20">
+                <div class="card" style="width: 100%;">
+                    <h3><i class="fas fa-list"></i> 최근 신청 이력</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>접수번호</th>
+                                <th>신청구분</th>
+                                <th>축종</th>
+                                <th>처리상태</th>
+                                <th>완료일자</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>REQ-2023-08</td>
+                                <td>정기 연장</td>
+                                <td>산란계</td>
+                                <td><span class="status-badge status-completed">완료</span></td>
+                                <td>2023-10-25</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        window.auth.checkAuth('farm');
+        document.getElementById('userNameDisplay').innerText = localStorage.getItem('user_id') + '님';
+    </script>
+</body>
+</html>

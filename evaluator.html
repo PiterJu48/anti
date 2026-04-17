@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>평가원 모드 | 동물복지인증 평가 시스템</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="auth.js"></script>
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- 사이드바 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>농림축산식품부</h2>
+                <p style="font-size: 0.8rem; color: #666;">동물복지인증 시스템</p>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active"><i class="fas fa-calendar-check"></i> 배정된 평가 목록</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link"><i class="fas fa-file-invoice"></i> 평가 보고서 작성</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link"><i class="fas fa-archive"></i> 과거 평가 이력</a>
+                </li>
+            </ul>
+            <div class="user-profile" style="margin-top: auto; padding-top: 20px; border-top: 1px solid #eee;">
+                <p id="userNameDisplay" style="font-weight: 500;"></p>
+                <p style="font-size: 0.8rem; color: #666;">전문 평가원</p>
+            </div>
+        </aside>
+
+        <!-- 메인 콘텐츠 -->
+        <main class="main-content">
+            <header class="header">
+                <h1>평가자 대시보드</h1>
+                <div class="user-info">
+                    <button class="logout-btn" onclick="window.auth.logout()">로그아웃</button>
+                </div>
+            </header>
+
+            <section class="card" style="margin-bottom: 25px; border-left: 5px solid var(--accent-color);">
+                <h3><i class="fas fa-exclamation-triangle"></i> 금주 예정 현장평가</h3>
+                <p style="margin-top: 10px;">총 <strong>2건</strong>의 현장 방문 평가가 예정되어 있습니다.</p>
+            </section>
+
+            <section class="mt-20">
+                <div class="card" style="width: 100%;">
+                    <h3><i class="fas fa-clipboard-list"></i> 진행 중인 평가 작업</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>대상 농장</th>
+                                <th>소재지</th>
+                                <th>평가 유형</th>
+                                <th>평가 일시</th>
+                                <th>상태</th>
+                                <th>작업</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>푸른들 농장</td>
+                                <td>경기도 이천시</td>
+                                <td>신규 인증</td>
+                                <td>2024-04-18 10:00</td>
+                                <td><span class="status-badge status-pending">방문 예정</span></td>
+                                <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;">보고서 작성</button></td>
+                            </tr>
+                            <tr>
+                                <td>행복돈사</td>
+                                <td>충청남도 홍성군</td>
+                                <td>정기 연장</td>
+                                <td>2024-04-20 14:00</td>
+                                <td><span class="status-badge status-pending">방문 예정</span></td>
+                                <td><button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;">보고서 작성</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="mt-20 card-grid">
+                <div class="card">
+                    <h3><i class="fas fa-book"></i> 평가 매뉴얼</h3>
+                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">2024년도 개정된 동물복지 축산농장 인증기준 해설서입니다.</p>
+                    <button class="btn-primary" style="background: var(--text-muted);">매뉴얼 보기</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        window.auth.checkAuth('evaluator');
+        document.getElementById('userNameDisplay').innerText = localStorage.getItem('user_id') + '님';
+    </script>
+</body>
+</html>
