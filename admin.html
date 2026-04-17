@@ -28,7 +28,7 @@
                     <a href="#" class="nav-link" onclick="showTab('farms')"><i class="fas fa-tractor"></i> 농장 관리</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link"><i class="fas fa-clipboard-list"></i> 평가항목 관리</a>
+                    <a href="#" class="nav-link" onclick="showTab('eval_items')"><i class="fas fa-clipboard-list"></i> 평가항목 관리</a>
                 </li>
             </ul>
             <div class="user-profile" style="margin-top: auto; padding-top: 20px; border-top: 1px solid #eee;">
@@ -153,26 +153,68 @@
                 </div>
             </div>
 
-            <!-- 농장 관리 탭 -->
-            <div id="farmsTab" class="tab-content" style="display: none;">
+            <!-- 평가항목 관리 탭 -->
+            <div id="eval_itemsTab" class="tab-content" style="display: none;">
                 <section class="card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h3><i class="fas fa-tractor"></i> 농장 관리</h3>
-                        <button class="btn-primary" onclick="openFarmModal()"><i class="fas fa-plus"></i> 신규 농장 등록</button>
+                        <h3><i class="fas fa-tasks"></i> 평가항목 관리</h3>
+                        <button class="btn-primary" onclick="openEvalItemModal()"><i class="fas fa-plus"></i> 신규 항목 추가</button>
                     </div>
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>농장명</th>
-                                <th>대표자명</th>
-                                <th>주소</th>
-                                <th>규모</th>
+                                <th>섹션</th>
+                                <th>대항목</th>
+                                <th>소항목</th>
+                                <th>평가기준</th>
+                                <th>적합기준</th>
+                                <th>결과</th>
                                 <th>관리</th>
                             </tr>
                         </thead>
-                        <tbody id="farmList"></tbody>
+                        <tbody id="evalItemList"></tbody>
                     </table>
                 </section>
+            </div>
+
+            <!-- 평가항목 등록/수정 모달 -->
+            <div id="evalItemModal" class="modal">
+                <div class="modal-content" style="width: 800px;">
+                    <h2 id="evalItemModalTitle">평가항목 등록</h2>
+                    <form id="evalItemForm" class="mt-20">
+                        <input type="hidden" id="evalItemId">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>섹션 (예: □ 일반기준)</label>
+                                <input type="text" id="ei_section" required>
+                            </div>
+                            <div class="form-group">
+                                <label>대항목</label>
+                                <input type="text" id="ei_large" required>
+                            </div>
+                            <div class="form-group">
+                                <label>소항목</label>
+                                <input type="text" id="ei_small">
+                            </div>
+                            <div class="form-group">
+                                <label>평가결과 구분</label>
+                                <input type="text" id="ei_result" placeholder="예: 적합/부적합">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label>평가 기준 (C열)</label>
+                            <textarea id="ei_standard" style="width: 100%; height: 80px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px;"></textarea>
+                        </div>
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label>적합 기준 (F열)</label>
+                            <textarea id="ei_compliance" style="width: 100%; height: 80px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px;"></textarea>
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                            <button type="button" class="logout-btn" onclick="closeEvalItemModal()">취소</button>
+                            <button type="submit" class="btn-primary">저장하기</button>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <!-- 농장 등록/수정 모달 -->
@@ -253,7 +295,7 @@
 
         // 탭 전환 기능
         function showTab(tabName) {
-            const tabs = ['dashboard', 'users', 'farms'];
+            const tabs = ['dashboard', 'users', 'farms', 'eval_items'];
             tabs.forEach(t => {
                 const el = document.getElementById(t + 'Tab');
                 if (el) el.style.display = (t === tabName) ? 'block' : 'none';
@@ -262,18 +304,106 @@
             // 메뉴 활성화 상태 변경
             document.querySelectorAll('.nav-link').forEach(link => {
                 link.classList.remove('active');
-                if (link.innerText.includes(tabName === 'dashboard' ? '대시보드' : tabName === 'users' ? '사용자' : '농장')) {
+                if (link.innerText.includes(tabName === 'dashboard' ? '대시보드' : tabName === 'users' ? '사용자' : tabName === 'farms' ? '농장' : '평가항목')) {
                     link.classList.add('active');
                 }
             });
 
-            const titleMap = { 'dashboard': '관리자 대시보드', 'users': '사용자(계정) 관리', 'farms': '농장 관리' };
+            const titleMap = { 
+                'dashboard': '관리자 대시보드', 
+                'users': '사용자(계정) 관리', 
+                'farms': '농장 관리',
+                'eval_items': '평가항목 관리'
+            };
             const pageTitle = document.getElementById('pageTitle');
             if (pageTitle) pageTitle.innerText = titleMap[tabName];
 
             if (tabName === 'farms') fetchFarms();
             if (tabName === 'users') fetchUsers();
+            if (tabName === 'eval_items') fetchEvalItems();
         }
+
+        // 평가항목 데이터 로드
+        async function fetchEvalItems() {
+            const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
+            if (error) return console.error(error);
+            
+            const list = document.getElementById('evalItemList');
+            list.innerHTML = data.map(item => `
+                <tr>
+                    <td style="font-size: 0.85rem;">${item.section}</td>
+                    <td style="font-weight: 500;">${item.large_item}</td>
+                    <td>${item.small_item || '-'}</td>
+                    <td style="font-size: 0.8rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.standard}</td>
+                    <td style="font-size: 0.8rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.compliance_criteria}</td>
+                    <td>${item.result || '-'}</td>
+                    <td>
+                        <button class="logout-btn" style="padding: 4px 8px;" onclick="editEvalItem(${JSON.stringify(item).replace(/"/g, '&quot;')})">수정</button>
+                        <button class="logout-btn" style="padding: 4px 8px; color: red;" onclick="deleteEvalItem(${item.id})">삭제</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openEvalItemModal() {
+            document.getElementById('evalItemModalTitle').innerText = '평가항목 등록';
+            document.getElementById('evalItemForm').reset();
+            document.getElementById('evalItemId').value = '';
+            document.getElementById('evalItemModal').style.display = 'block';
+        }
+
+        function closeEvalItemModal() {
+            document.getElementById('evalItemModal').style.display = 'none';
+        }
+
+        function editEvalItem(item) {
+            document.getElementById('evalItemModalTitle').innerText = '평가항목 수정';
+            document.getElementById('evalItemId').value = item.id;
+            document.getElementById('ei_section').value = item.section;
+            document.getElementById('ei_large').value = item.large_item;
+            document.getElementById('ei_small').value = item.small_item || '';
+            document.getElementById('ei_standard').value = item.standard;
+            document.getElementById('ei_compliance').value = item.compliance_criteria;
+            document.getElementById('ei_result').value = item.result || '';
+            
+            document.getElementById('evalItemModal').style.display = 'block';
+        }
+
+        async function deleteEvalItem(id) {
+            if (confirm('평가항목을 삭제하시겠습니까?')) {
+                const { error } = await db.from('evaluation_items').delete().eq('id', id);
+                if (error) alert(error.message);
+                else fetchEvalItems();
+            }
+        }
+
+        document.getElementById('evalItemForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('evalItemId').value;
+            const itemData = {
+                section: document.getElementById('ei_section').value,
+                large_item: document.getElementById('ei_large').value,
+                small_item: document.getElementById('ei_small').value,
+                standard: document.getElementById('ei_standard').value,
+                compliance_criteria: document.getElementById('ei_compliance').value,
+                result: document.getElementById('ei_result').value
+            };
+
+            let error;
+            if (id) {
+                const { error: err } = await db.from('evaluation_items').update(itemData).eq('id', id);
+                error = err;
+            } else {
+                const { error: err } = await db.from('evaluation_items').insert([itemData]);
+                error = err;
+            }
+
+            if (error) alert(error.message);
+            else {
+                fetchEvalItems();
+                closeEvalItemModal();
+            }
+        });
 
         // 사용자 데이터 로드
         function fetchUsers() {
