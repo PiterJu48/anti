@@ -181,8 +181,10 @@
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>대항목</label>
-                                <input type="text" id="ei_large" required>
+                                <label>대항목 선택</label>
+                                <select id="ei_large" required style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                    <!-- JS로 대항목 목록 삽입 -->
+                                </select>
                             </div>
                             <div class="form-group">
                                 <label>소항목</label>
@@ -346,6 +348,11 @@
             const uniqueSections = [...new Set(data.map(item => item.section))];
             const sectionSelect = document.getElementById('ei_section');
             sectionSelect.innerHTML = uniqueSections.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            // 대항목 목록 추출 (드롭다운용)
+            const uniqueLargeItems = [...new Set(data.map(item => item.large_item))];
+            const largeSelect = document.getElementById('ei_large');
+            largeSelect.innerHTML = uniqueLargeItems.map(l => `<option value="${l}">${l}</option>`).join('');
 
             // 섹션별 그룹화
             const grouped = data.reduce((acc, item) => {
