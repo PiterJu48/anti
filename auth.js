@@ -15,82 +15,90 @@ function formatIdToEmail(userId) {
     return userId + DUMMY_DOMAIN;
 }
 
+// 초기 사용자 데이터 (localStorage에 없으면 사용)
+const DEFAULT_USERS = [
+    { id: 'admin', pw: '123456', name: '시스템 관리자', role: 'admin' },
+    { id: 'farm1', pw: '1234', name: '행복농장주', role: 'farm' },
+    { id: 'eval1', pw: '1234', name: '김평가원', role: 'evaluator' }
+];
+
 /**
- * 로그인 기능
+ * 사용자 목록 가져오기
+ */
+function getUsers() {
+    const users = localStorage.getItem('app_users');
+    return users ? JSON.parse(users) : DEFAULT_USERS;
+}
+
+/**
+ * 사용자 저장하기
+ */
+function saveUsers(users) {
+    localStorage.setItem('app_users', JSON.stringify(users));
+}
+
+/**
+ * 로그인 기능 (로컬 데이터 기반)
  */
 async function login(userId, password) {
-    // [데모용] 하드코딩된 관리자 계정 체크
-    if (userId === 'admin' && password === '123456') {
-        const userRole = 'admin';
-        localStorage.setItem('user_role', userRole);
-        localStorage.setItem('user_id', userId);
-        return userRole;
+    const users = getUsers();
+    const user = users.find(u => u.id === userId && u.pw === password);
+
+    if (user) {
+        localStorage.setItem('user_role', user.role);
+        localStorage.setItem('user_id', user.id);
+        localStorage.setItem('user_name', user.name);
+        return user.role;
+    } else {
+        throw new Error('아이디 또는 비밀번호가 올바르지 않습니다.');
     }
-
-    const email = formatIdToEmail(userId);
-    
-    const { data, error } = await _supabase.auth.signInWithPassword({
-        email: email,
-        password: password
-    });
-
-    if (error) {
-        throw error;
-    }
-
-    // 역할(Role) 확인 로직
-    const userRole = data.user.user_metadata.role || 'farm';
-    localStorage.setItem('user_role', userRole);
-    localStorage.setItem('user_id', userId);
-
-    // 로그인 성공 후 프로필 동기화 (profiles 테이블)
-    try {
-        const { data: profile, error: profileError } = await _supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .single();
-
-        if (profileError && profileError.code === 'PGRST116') {
-            // 프로필이 없는 경우 생성 (최초 로그인)
-            await _supabase.from('profiles').insert([{
-                id: data.user.id,
-                user_id_simple: userId,
-                role: userRole,
-                name: userId
-            }]);
-        }
-    } catch (e) {
-        console.error('Profile sync error:', e);
-    }
-
-    return userRole;
 }
+
+/**
+ * 계정 추가/수정/삭제 기능
+ */
+const accountManager = {
+    getAll: getUsers,
+    add: (newUser) => {
+        const users = getUsers();
+        if (users.find(u => u.id === newUser.id)) throw new Error('이미 존재하는 아이디입니다.');
+        users.push(newUser);
+        saveUsers(users);
+    },
+    update: (id, updatedData) => {
+        const users = getUsers();
+        const index = users.findIndex(u => u.id === id);
+        if (index !== -1) {
+            users[index] = { ...users[index], ...updatedData };
+            saveUsers(users);
+        }
+    },
+    delete: (id) => {
+        if (id === 'admin') throw new Error('관리자 계정은 삭제할 수 없습니다.');
+        const users = getUsers();
+        const filtered = users.filter(u => u.id !== id);
+        saveUsers(filtered);
+    }
+};
 
 /**
  * 로그아웃 기능
  */
 async function logout() {
-    await _supabase.auth.signOut();
-    localStorage.clear();
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('user_name');
     window.location.href = 'index.html';
 }
 
 /**
- * 세션 체크 및 페이지 리다이렉션
+ * 세션 체크
  */
 async function checkAuth(requiredRole) {
     const currentRole = localStorage.getItem('user_role');
     const currentId = localStorage.getItem('user_id');
 
-    // [데모용] 관리자 계정은 세션 체크 건너뜀
-    if (currentId === 'admin' && currentRole === 'admin') {
-        return;
-    }
-
-    const { data: { session } } = await _supabase.auth.getSession();
-    
-    if (!session) {
+    if (!currentId) {
         window.location.href = 'index.html';
         return;
     }
@@ -101,10 +109,11 @@ async function checkAuth(requiredRole) {
     }
 }
 
-// 전역에서 사용할 수 있도록 export (Vanilla JS 스타일)
+// 전역 노출
 window.auth = {
     login,
     logout,
     checkAuth,
-    supabase: _supabase
+    accounts: accountManager,
+    supabase: _supabase // 농장 관리는 여전히 Supabase 사용 가능
 };
