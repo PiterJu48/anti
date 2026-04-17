@@ -217,6 +217,28 @@
                 </div>
             </div>
 
+            <!-- 농장 관리 탭 (복구) -->
+            <div id="farmsTab" class="tab-content" style="display: none;">
+                <section class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3><i class="fas fa-tractor"></i> 농장 관리</h3>
+                        <button class="btn-primary" onclick="openFarmModal()"><i class="fas fa-plus"></i> 신규 농장 등록</button>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>농장명</th>
+                                <th>대표자명</th>
+                                <th>주소</th>
+                                <th>규모</th>
+                                <th>관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="farmList"></tbody>
+                    </table>
+                </section>
+            </div>
+
             <!-- 농장 등록/수정 모달 -->
             <div id="farmModal" class="modal">
                 <div class="modal-content">
