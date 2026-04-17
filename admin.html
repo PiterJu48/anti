@@ -19,19 +19,16 @@
             </div>
             <ul class="nav-menu">
                 <li class="nav-item">
-                    <a href="#" class="nav-link active"><i class="fas fa-home"></i> 대시보드</a>
+                    <a href="#" class="nav-link active" onclick="showTab('dashboard')"><i class="fas fa-home"></i> 대시보드</a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link"><i class="fas fa-users"></i> 사용자 관리</a>
+                    <a href="#" class="nav-link" onclick="showTab('users')"><i class="fas fa-users"></i> 사용자 관리</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" onclick="showTab('farms')"><i class="fas fa-tractor"></i> 농장 관리</a>
                 </li>
                 <li class="nav-item">
                     <a href="#" class="nav-link"><i class="fas fa-clipboard-list"></i> 평가항목 관리</a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link"><i class="fas fa-chart-bar"></i> 인증 통계</a>
-                </li>
-                <li class="nav-item">
-                    <a href="#" class="nav-link"><i class="fas fa-cog"></i> 시스템 설정</a>
                 </li>
             </ul>
             <div class="user-profile" style="margin-top: auto; padding-top: 20px; border-top: 1px solid #eee;">
@@ -43,101 +40,105 @@
         <!-- 메인 콘텐츠 -->
         <main class="main-content">
             <header class="header">
-                <h1>관리자 대시보드</h1>
+                <h1 id="pageTitle">관리자 대시보드</h1>
                 <div class="user-info">
                     <span id="currentTime"></span>
                     <button class="logout-btn" onclick="window.auth.logout()">로그아웃</button>
                 </div>
             </header>
 
-            <section class="card-grid">
-                <div class="card">
-                    <h3><i class="fas fa-user-plus"></i> 신규 인증 신청</h3>
-                    <div style="font-size: 2rem; font-weight: 700; color: var(--primary-color);">12 건</div>
-                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">이번 주 접수된 신청 내역</p>
-                </div>
-                <div class="card">
-                    <h3><i class="fas fa-search"></i> 진행 중인 평가</h3>
-                    <div style="font-size: 2rem; font-weight: 700; color: var(--accent-color);">8 건</div>
-                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">평가원 현장 방문 중</p>
-                </div>
-                <div class="card">
-                    <h3><i class="fas fa-check-circle"></i> 인증 완료 (누적)</h3>
-                    <div style="font-size: 2rem; font-weight: 700; color: #2c7a7b;">145 건</div>
-                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">2024년 전체 실적</p>
-                </div>
-            </section>
+            <!-- 대시보드 탭 -->
+            <div id="dashboardTab" class="tab-content">
+                <section class="card-grid">
+                    <div class="card">
+                        <h3><i class="fas fa-user-plus"></i> 신규 인증 신청</h3>
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--primary-color);">12 건</div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">이번 주 접수된 신청 내역</p>
+                    </div>
+                    <div class="card">
+                        <h3><i class="fas fa-search"></i> 진행 중인 평가</h3>
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--accent-color);">8 건</div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">평가원 현장 방문 중</p>
+                    </div>
+                    <div class="card">
+                        <h3><i class="fas fa-check-circle"></i> 인증 완료 (누적)</h3>
+                        <div style="font-size: 2rem; font-weight: 700; color: #2c7a7b;">145 건</div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">2024년 전체 실적</p>
+                    </div>
+                </section>
 
-            <section class="mt-20">
-                <div class="card" style="width: 100%;">
-                    <h3><i class="fas fa-list"></i> 최근 인증 심사 현황</h3>
+                <section class="mt-20">
+                    <div class="card" style="width: 100%;">
+                        <h3><i class="fas fa-list"></i> 최근 인증 심사 현황</h3>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>신청번호</th>
+                                    <th>농장명</th>
+                                    <th>축종</th>
+                                    <th>평가원</th>
+                                    <th>상태</th>
+                                    <th>일자</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>2024-0012</td>
+                                    <td>푸른들 농장</td>
+                                    <td>산란계</td>
+                                    <td>김철수</td>
+                                    <td><span class="status-badge status-process">현장평가 중</span></td>
+                                    <td>2024-04-15</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- 사용자 관리 탭 -->
+            <div id="usersTab" class="tab-content" style="display: none;">
+                <section class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3><i class="fas fa-users-cog"></i> 사용자(계정) 관리</h3>
+                        <button class="btn-primary" onclick="alert('신규 계정은 Supabase Auth에서 직접 생성해 주세요. (데모 버전)')">신규 사용자 등록</button>
+                    </div>
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>신청번호</th>
-                                <th>농장명</th>
-                                <th>축종</th>
-                                <th>평가원</th>
-                                <th>상태</th>
-                                <th>일자</th>
+                                <th>단순 ID</th>
+                                <th>이름</th>
+                                <th>역할</th>
+                                <th>생성일</th>
+                                <th>관리</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <tr>
-                                <td>2024-0012</td>
-                                <td>푸른들 농장</td>
-                                <td>산란계</td>
-                                <td>김철수</td>
-                                <td><span class="status-badge status-process">현장평가 중</span></td>
-                                <td>2024-04-15</td>
-                            </tr>
-                            <tr>
-                                <td>2024-0011</td>
-                                <td>행복돈사</td>
-                                <td>돼지</td>
-                                <td>이영희</td>
-                                <td><span class="status-badge status-pending">서류검토</span></td>
-                                <td>2024-04-14</td>
-                            </tr>
-                            <tr>
-                                <td>2024-0010</td>
-                                <td>햇살목장</td>
-                                <td>젖소</td>
-                                <td>박민준</td>
-                                <td><span class="status-badge status-completed">인증완료</span></td>
-                                <td>2024-04-10</td>
-                            </tr>
-                        </tbody>
+                        <tbody id="userList"></tbody>
                     </table>
-                </div>
-            </section>
+                </section>
+            </div>
 
-            <!-- 농장 관리 섹션 -->
-            <section class="mt-20">
-                <div class="card" style="width: 100%;">
+            <!-- 농장 관리 탭 -->
+            <div id="farmsTab" class="tab-content" style="display: none;">
+                <section class="card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <h3><i class="fas fa-tractor"></i> 농장 관리</h3>
                         <button class="btn-primary" onclick="openFarmModal()"><i class="fas fa-plus"></i> 신규 농장 등록</button>
                     </div>
-                    <p style="margin-bottom: 15px; font-size: 0.9rem;">동물복지인증 평가 대상 농장 목록입니다.</p>
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <th>농장명</th>
                                 <th>대표자명</th>
                                 <th>주소</th>
-                                <th>사육시설 및 규모</th>
-                                <th>전화번호</th>
-                                <th>비고</th>
+                                <th>규모</th>
                                 <th>관리</th>
                             </tr>
                         </thead>
-                        <tbody id="farmList">
-                            <!-- JS로 데이터 삽입 -->
-                        </tbody>
+                        <tbody id="farmList"></tbody>
                     </table>
-                </div>
-            </section>
+                </section>
+            </div>
 
             <!-- 농장 등록/수정 모달 -->
             <div id="farmModal" class="modal">
@@ -212,21 +213,53 @@
         window.auth.checkAuth('admin');
         document.getElementById('userNameDisplay').innerText = localStorage.getItem('user_id') + '님';
         
-        // Supabase 인스턴스 가져오기 (auth.js에서 정의됨)
         const _supabase = window.auth.supabase;
 
-        // 농장 데이터 관리 (Supabase 연동)
-        async function fetchFarms() {
-            const { data, error } = await _supabase
-                .from('farms')
-                .select('*')
-                .order('created_at', { ascending: false });
+        // 탭 전환 기능
+        function showTab(tabName) {
+            const tabs = ['dashboard', 'users', 'farms'];
+            tabs.forEach(t => {
+                document.getElementById(t + 'Tab').style.display = (t === tabName) ? 'block' : 'none';
+            });
+            
+            // 메뉴 활성화 상태 변경
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.innerText.includes(tabName === 'dashboard' ? '대시보드' : tabName === 'users' ? '사용자' : '농장')) {
+                    link.classList.add('active');
+                }
+            });
 
-            if (error) {
-                console.error('Error fetching farms:', error);
-                // 테이블이 없는 경우를 대비해 샘플 데이터 표시 (선택사항)
-                return;
-            }
+            const titleMap = { 'dashboard': '관리자 대시보드', 'users': '사용자(계정) 관리', 'farms': '농장 관리' };
+            document.getElementById('pageTitle').innerText = titleMap[tabName];
+
+            if (tabName === 'farms') fetchFarms();
+            if (tabName === 'users') fetchUsers();
+        }
+
+        // 사용자 데이터 로드
+        async function fetchUsers() {
+            const { data, error } = await _supabase.from('profiles').select('*');
+            if (error) return console.error(error);
+            
+            const list = document.getElementById('userList');
+            list.innerHTML = data.map(user => `
+                <tr>
+                    <td>${user.user_id_simple}</td>
+                    <td>${user.name}</td>
+                    <td>${user.role}</td>
+                    <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                    <td>
+                        <button class="logout-btn" style="padding: 4px 8px;">수정</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 농장 데이터 로드 (기존 로직 유지)
+        async function fetchFarms() {
+            const { data, error } = await _supabase.from('farms').select('*').order('created_at', { ascending: false });
+            if (error) return console.error(error);
             renderFarms(data);
         }
 
@@ -238,8 +271,6 @@
                     <td>${farm.representative}</td>
                     <td>${farm.address}</td>
                     <td>${farm.facility_scale || '-'}</td>
-                    <td>${farm.phone_number || '-'}</td>
-                    <td>${farm.remarks || '-'}</td>
                     <td>
                         <button class="logout-btn" style="padding: 4px 8px;" onclick="editFarm(${JSON.stringify(farm).replace(/"/g, '&quot;')})">수정</button>
                         <button class="logout-btn" style="padding: 4px 8px; color: red;" onclick="deleteFarm(${farm.id})">삭제</button>

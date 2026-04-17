@@ -38,10 +38,31 @@ async function login(userId, password) {
         throw error;
     }
 
-    // 역할(Role) 확인 로직 (metadata에 저장되어 있다고 가정)
-    const userRole = data.user.user_metadata.role || 'farm'; // 기본값 농장주
+    // 역할(Role) 확인 로직
+    const userRole = data.user.user_metadata.role || 'farm';
     localStorage.setItem('user_role', userRole);
     localStorage.setItem('user_id', userId);
+
+    // 로그인 성공 후 프로필 동기화 (profiles 테이블)
+    try {
+        const { data: profile, error: profileError } = await _supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
+
+        if (profileError && profileError.code === 'PGRST116') {
+            // 프로필이 없는 경우 생성 (최초 로그인)
+            await _supabase.from('profiles').insert([{
+                id: data.user.id,
+                user_id_simple: userId,
+                role: userRole,
+                name: userId
+            }]);
+        }
+    } catch (e) {
+        console.error('Profile sync error:', e);
+    }
 
     return userRole;
 }
