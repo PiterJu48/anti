@@ -117,16 +117,7 @@
                         </div>
                         
                         <div id="officialEvalItemsContainer">
-                            <!-- 평가항목 로드 -->
-                        </div>
-
-                        <div class="card" style="margin-top: 30px; background: #fffaf0;">
-                            <h4><i class="fas fa-pen-nib"></i> 종합 평가 의견</h4>
-                            <textarea id="overallSummary" style="width: 100%; height: 100px; margin-top: 10px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px;" placeholder="농장의 전반적인 복지 상태 및 개선 권고 사항을 입력하세요."></textarea>
-                        </div>
-
-                        <div style="margin-top: 30px; text-align: center;">
-                            <button class="btn-primary" style="padding: 15px 60px; font-size: 1.1rem;" onclick="submitOfficialEvaluation()">평가 보고서 최종 제출</button>
+                            <!-- 평가항목 및 위저드 네비게이션이 동적으로 생성됨 -->
                         </div>
                     </div>
                 </section>
@@ -155,13 +146,7 @@
                 </section>
             </div>
 
-            <section class="mt-20 card-grid">
-                <div class="card">
-                    <h3><i class="fas fa-book"></i> 평가 매뉴얼</h3>
-                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">2024년도 개정된 동물복지 축산농장 인증기준 해설서입니다.</p>
-                    <button class="btn-primary" style="background: var(--text-muted);">매뉴얼 보기</button>
-                </div>
-            </section>
+
         </main>
     </div>
 
@@ -175,8 +160,12 @@
             // 초기 탭 활성화
             showTab('assigned');
         });
-        
         const db = window.auth.supabase;
+
+        // 평가 상태를 저장할 전역 변수들
+        let evaluationItems = [];      // 모든 평가 항목 원본 데이터
+        let largeItemGroups = [];      // 대항목으로 그룹화된 데이터
+        let currentGroupIndex = 0;     // 현재 표시 중인 대항목 그룹의 인덱스
 
         // 사이드바 토글
         function toggleSidebar() {
@@ -238,7 +227,7 @@
                 const select = document.getElementById('targetFarm');
                 if (select) {
                     select.innerHTML = '<option value="">농장을 선택하세요</option>' + 
-                        data.map(f => `<option value="${f.id}">${f.name} (${f.owner})</option>`).join('');
+                        data.map(f => `<option value="${f.id}">${f.name} (${f.representative || f.owner || ''})</option>`).join('');
                 }
                 
                 if (document.getElementById('reportStep1')) document.getElementById('reportStep1').style.display = 'block';
@@ -248,6 +237,7 @@
             }
         }
 
+        // 공식 평가 프로세스 시작 및 대항목 위저드 구성
         async function startOfficialEvaluation() {
             const farmId = document.getElementById('targetFarm').value;
             if (!farmId) return alert('농장을 선택해 주세요.');
@@ -263,71 +253,240 @@
                 const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
                 if (error) throw error;
 
-                const container = document.getElementById('officialEvalItemsContainer');
-                const grouped = data.reduce((acc, item) => {
-                    if (!acc[item.section]) acc[item.section] = [];
-                    acc[item.section].push(item);
-                    return acc;
-                }, {});
+                // 1. 메모리 데이터 초기화 (라디오 버튼 및 의견 필드 백업용)
+                evaluationItems = data.map(item => ({
+                    ...item,
+                    eval_value: null,
+                    eval_comment: ""
+                }));
 
-                container.innerHTML = Object.keys(grouped).map(section => `
-                    <div class="section-group" style="margin-bottom: 30px;">
-                        <h4 style="background: #f8fafc; padding: 12px 20px; border-left: 5px solid var(--primary-color); margin-bottom: 15px; font-size: 1.1rem;">${section}</h4>
-                        ${grouped[section].map(item => `
-                            <div class="card" style="margin-bottom: 15px; padding: 20px; border: 1px solid #edf2f7;">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
-                                    <div style="flex: 1;">
-                                        <div style="font-weight: 700; color: #2d3748; margin-bottom: 5px;">${item.large_item} ${item.small_item ? '- ' + item.small_item : ''}</div>
-                                        <div style="font-size: 0.9rem; color: #4a5568; margin-bottom: 10px;">${item.standard}</div>
-                                        <div style="font-size: 0.85rem; color: #718096; font-style: italic;">적합 기준: ${item.compliance_criteria}</div>
-                                    </div>
-                                    <div style="display: flex; flex-direction: column; gap: 10px; min-width: 150px; width: 100%;">
-                                        <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-wrap: wrap;">
-                                            <label style="cursor: pointer;"><input type="radio" name="off_item_${item.id}" value="Y" required> 적합</label>
-                                            <label style="cursor: pointer;"><input type="radio" name="off_item_${item.id}" value="N"> 부적합</label>
-                                            <label style="cursor: pointer;"><input type="radio" name="off_item_${item.id}" value="NA"> N/A</label>
-                                        </div>
-                                        <input type="text" id="off_comm_${item.id}" placeholder="평가 의견 입력" style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem;">
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                `).join('');
+                // 2. 대항목(large_item) 기준으로 그룹 생성 (순서 보장)
+                largeItemGroups = [];
+                let currentGroup = null;
+
+                evaluationItems.forEach(item => {
+                    if (!currentGroup || currentGroup.largeItem !== item.large_item || currentGroup.section !== item.section) {
+                        currentGroup = {
+                            section: item.section,
+                            largeItem: item.large_item,
+                            items: []
+                        };
+                        largeItemGroups.push(currentGroup);
+                    }
+                    currentGroup.items.push(item);
+                });
+
+                currentGroupIndex = 0;
+                window.overallSummaryValue = ""; // 종합 의견 초기화
+                
+                // 3. 첫 번째 대항목 화면 렌더링
+                renderCurrentGroup();
+
             } catch (err) {
                 console.error('Error starting evaluation:', err);
                 alert('평가 항목을 불러오는 중 오류가 발생했습니다.');
             }
         }
 
+        // 현재 선택된 대항목 페이지를 렌더링
+        function renderCurrentGroup() {
+            const container = document.getElementById('officialEvalItemsContainer');
+            if (largeItemGroups.length === 0) return;
+
+            // 1. 마지막 페이지: 종합 의견 작성 및 제출 화면
+            if (currentGroupIndex === largeItemGroups.length) {
+                const progressHtml = `
+                    <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 10px; font-weight: 500;">
+                        진행 상황: 완료 단계 (종합 평가 의견 작성)
+                    </div>
+                    <div style="width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; margin-bottom: 25px; overflow: hidden;">
+                        <div style="width: 100%; height: 100%; background: #2c7a7b; border-radius: 3px;"></div>
+                    </div>
+                `;
+
+                const summaryHtml = `
+                    <div class="card" style="background: #fffaf0; padding: 25px; border: 1px solid #fbd38d; margin-bottom: 25px;">
+                        <h4 style="color: #dd6b20; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                            <i class="fas fa-pen-nib"></i> 종합 평가 의견
+                        </h4>
+                        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">농장의 전반적인 동물복지 상태 및 개선 권고 사항에 대한 의견을 최종 작성해 주세요.</p>
+                        <textarea id="overallSummary" style="width: 100%; height: 150px; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.95rem; line-height: 1.5;" placeholder="의견을 서술식으로 작성하세요."></textarea>
+                    </div>
+                `;
+
+                const navigationHtml = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px;">
+                        <button class="logout-btn" style="padding: 12px 30px; font-weight: 500;" onclick="prevGroup()">
+                            <i class="fas fa-arrow-left"></i> 이전 대항목
+                        </button>
+                        <button class="btn-primary" style="padding: 12px 40px; font-weight: 700; background: #2c7a7b;" onclick="submitOfficialEvaluation()">
+                            평가 보고서 최종 제출 <i class="fas fa-check-double"></i>
+                        </button>
+                    </div>
+                `;
+
+                container.innerHTML = progressHtml + summaryHtml + navigationHtml;
+
+                // 기존 작성 데이터가 있는 경우 텍스트 반영
+                const summaryTextarea = document.getElementById('overallSummary');
+                if (summaryTextarea && window.overallSummaryValue) {
+                    summaryTextarea.value = window.overallSummaryValue;
+                }
+
+                // 종합의견 입력 시 전역 상태에 임시 저장
+                if (summaryTextarea) {
+                    summaryTextarea.addEventListener('input', (e) => {
+                        window.overallSummaryValue = e.target.value;
+                    });
+                }
+                return;
+            }
+
+            // 2. 대항목 평가 페이지
+            const group = largeItemGroups[currentGroupIndex];
+            
+            const progressHtml = `
+                <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 10px; font-weight: 500;">
+                    진행 상태: ${currentGroupIndex + 1} / ${largeItemGroups.length} 페이지
+                </div>
+                <div style="width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; margin-bottom: 25px; overflow: hidden;">
+                    <div style="width: ${((currentGroupIndex) / largeItemGroups.length) * 100}%; height: 100%; background: var(--primary-color); transition: width 0.3s;"></div>
+                </div>
+            `;
+
+            const itemsHtml = `
+                <div class="section-group" style="margin-bottom: 20px;">
+                    <h4 style="background: #f8fafc; padding: 12px 20px; border-left: 5px solid var(--primary-color); margin-bottom: 15px; font-size: 1.1rem;">
+                        ${group.section} &gt; ${group.largeItem}
+                    </h4>
+                    ${group.items.map(item => `
+                        <div class="card" style="margin-bottom: 15px; padding: 20px; border: 1px solid #edf2f7;">
+                            <div class="eval-item-row">
+                                <div class="eval-item-left">
+                                    <div style="font-weight: 700; color: #2d3748; margin-bottom: 5px;">${item.small_item || item.large_item}</div>
+                                    <div style="font-size: 0.9rem; color: #4a5568; margin-bottom: 10px;">${item.standard}</div>
+                                    <div style="font-size: 0.85rem; color: #718096; font-style: italic;">적합 기준: ${item.compliance_criteria}</div>
+                                </div>
+                                <div class="eval-item-right">
+                                    <div class="eval-item-options">
+                                        <label style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                            <input type="radio" name="off_item_${item.id}" value="Y" required 
+                                                ${item.eval_value === 'Y' ? 'checked' : ''} 
+                                                onchange="saveItemValue(${item.id}, 'Y')"> 적합
+                                        </label>
+                                        <label style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                            <input type="radio" name="off_item_${item.id}" value="N" 
+                                                ${item.eval_value === 'N' ? 'checked' : ''} 
+                                                onchange="saveItemValue(${item.id}, 'N')"> 부적합
+                                        </label>
+                                        <label style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                            <input type="radio" name="off_item_${item.id}" value="NA" 
+                                                ${item.eval_value === 'NA' ? 'checked' : ''} 
+                                                onchange="saveItemValue(${item.id}, 'NA')"> N/A
+                                        </label>
+                                    </div>
+                                    <input type="text" id="off_comm_${item.id}" placeholder="평가 의견 입력" 
+                                        value="${item.eval_comment || ''}" 
+                                        oninput="saveItemComment(${item.id}, this.value)" 
+                                        style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem; border-radius: 4px;">
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            const navigationHtml = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px;">
+                    <div>
+                        ${currentGroupIndex > 0 ? `
+                            <button class="logout-btn" style="padding: 12px 30px; font-weight: 500;" onclick="prevGroup()">
+                                <i class="fas fa-arrow-left"></i> 이전 대항목
+                            </button>
+                        ` : ''}
+                    </div>
+                    <div>
+                        <button class="btn-primary" style="padding: 12px 40px; font-weight: 500;" onclick="nextGroup()">
+                            다음 <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = progressHtml + itemsHtml + navigationHtml;
+        }
+
+        // 라디오 버튼 선택 시 메모리 업데이트
+        function saveItemValue(id, value) {
+            const item = evaluationItems.find(i => i.id === id);
+            if (item) {
+                item.eval_value = value;
+            }
+        }
+
+        // 평가의견 작성 시 메모리 업데이트
+        function saveItemComment(id, comment) {
+            const item = evaluationItems.find(i => i.id === id);
+            if (item) {
+                item.eval_comment = comment;
+            }
+        }
+
+        // 이전 페이지로 이동
+        function prevGroup() {
+            if (currentGroupIndex > 0) {
+                currentGroupIndex--;
+                renderCurrentGroup();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        // 다음 페이지로 이동 (검증 포함)
+        function nextGroup() {
+            const group = largeItemGroups[currentGroupIndex];
+            const uncompleted = group.items.filter(i => i.eval_value === null);
+
+            if (uncompleted.length > 0) {
+                alert('현재 대항목의 모든 평가 항목을 입력(적합/부적합/NA)해 주세요.');
+                return;
+            }
+
+            if (currentGroupIndex < largeItemGroups.length) {
+                currentGroupIndex++;
+                renderCurrentGroup();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        // 최종 보고서 제출 처리
         async function submitOfficialEvaluation() {
             const farmId = document.getElementById('targetFarm').value;
-            const container = document.getElementById('officialEvalItemsContainer');
-            const radios = container.querySelectorAll('input[type="radio"]:checked');
-            const allItems = container.querySelectorAll('.card');
+            const evaluatorId = localStorage.getItem('user_id');
+            const summary = window.overallSummaryValue || "";
 
-            if (radios.length < allItems.length) return alert('모든 항목에 대해 평가를 완료해 주세요.');
+            // 미해결 문항 재검증
+            const uncompletedItems = evaluationItems.filter(i => i.eval_value === null);
+            if (uncompletedItems.length > 0) {
+                const uncompletedNames = [...new Set(uncompletedItems.map(i => i.large_item))];
+                alert(`아직 평가되지 않은 문항이 존재합니다.\n대항목: ${uncompletedNames.join(', ')}`);
+                return;
+            }
 
             let compliant = 0;
             let totalTarget = 0;
             let details = {};
 
-            radios.forEach(radio => {
-                const itemId = radio.name.replace('off_item_', '');
-                const comment = document.getElementById('off_comm_' + itemId).value;
-                details[itemId] = { status: radio.value, comment: comment };
-                
-                if (radio.value === 'Y') {
+            evaluationItems.forEach(item => {
+                details[item.id] = { status: item.eval_value, comment: item.eval_comment };
+                if (item.eval_value === 'Y') {
                     compliant++;
                     totalTarget++;
-                } else if (radio.value === 'N') {
+                } else if (item.eval_value === 'N') {
                     totalTarget++;
                 }
             });
 
             const score = totalTarget > 0 ? Math.round((compliant / totalTarget) * 100) : 0;
-            const evaluatorId = localStorage.getItem('user_id');
-            const summary = document.getElementById('overallSummary').value;
 
             try {
                 const { error } = await db.from('evaluation_reports').insert({
@@ -341,6 +500,13 @@
                 if (error) throw error;
 
                 alert('평가 보고서가 성공적으로 제출되었습니다.');
+                
+                // 데이터 초기화
+                window.overallSummaryValue = "";
+                evaluationItems = [];
+                largeItemGroups = [];
+                currentGroupIndex = 0;
+
                 showTab('assigned');
             } catch (err) {
                 console.error('Error submitting evaluation:', err);
@@ -372,6 +538,10 @@
 
         function cancelEvaluation() {
             if (confirm('평가를 중단하시겠습니까? 입력된 내용은 저장되지 않습니다.')) {
+                window.overallSummaryValue = "";
+                evaluationItems = [];
+                largeItemGroups = [];
+                currentGroupIndex = 0;
                 showTab('report');
             }
         }

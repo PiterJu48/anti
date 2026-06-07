@@ -380,3 +380,52 @@ body {
         font-size: 1.4rem;
     }
 }
+
+/* 평가 항목 리스트 카드 내부 레이아웃 */
+.eval-item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.eval-item-left {
+    flex: 1;
+}
+
+.eval-item-right {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 200px;
+    width: auto;
+}
+
+/* 평가 항목 오른쪽 입력 영역 라디오 버튼 정렬 */
+.eval-item-options {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+/* 모바일 반응형 처리 */
+@media (max-width: 768px) {
+    .eval-item-row {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .eval-item-right {
+        width: 100%;
+        min-width: unset;
+    }
+    
+    .eval-item-options {
+        justify-content: flex-start; /* 모바일에서는 좌측 정렬 */
+        gap: 20px; /* 터치가 쉽도록 간격을 더 넓힘 */
+        margin-top: 5px;
+    }
+}
+

@@ -43,6 +43,11 @@ def import_data():
                     
                     if not large_item and not standard:
                         continue
+
+                    # 평가방법 판별 (적합기준이나 결과에 숫자가 있으면 점수항목)
+                    eval_method = "적부항목"
+                    if (compliance and compliance.strip().isdigit()) or (result and ("~" in result or result.strip().isdigit())):
+                        eval_method = "점수항목"
                         
                     items.append({
                         "section": current_section,
@@ -50,7 +55,8 @@ def import_data():
                         "small_item": small_item,
                         "standard": standard,
                         "compliance_criteria": compliance,
-                        "result": result
+                        "result": result,
+                        "eval_method": eval_method
                     })
                 except IndexError:
                     continue
