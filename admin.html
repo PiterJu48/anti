@@ -753,6 +753,8 @@
 
                     const items = [];
                     let currentSection = "일반기준";
+                    let currentLargeItem = "";
+                    let currentSmallItem = "";
 
                     for (let i = 0; i < rows.length; i++) {
                         const row = rows[i];
@@ -773,17 +775,33 @@
                         // 섹션 헤더 체크 (□로 시작하거나 특정 키워드)
                         if (col0.startsWith('□')) {
                             currentSection = col0;
+                            currentLargeItem = "";
+                            currentSmallItem = "";
                             continue;
                         }
 
-                        const largeItem = col0;
-                        const smallItem = row[1] ? row[1].trim() : "";
+                        let largeItem = col0;
+                        let smallItem = row[1] ? row[1].trim() : "";
                         const standard = row[2] ? row[2].trim() : "";
                         const compliance = row[5] ? row[5].trim() : "";
                         const result = row[6] ? row[6].trim() : "";
 
-                        if (!largeItem && !standard) {
+                        // 평가 기준(standard)이 없으면 유효한 평가 문항이 아니므로 임포트 대상에서 제외
+                        if (!standard || standard.trim() === "") {
                             continue;
+                        }
+
+                        // 대항목/소항목 상속 처리 (빈 값일 경우 직전 행의 값 상속)
+                        if (largeItem !== "") {
+                            currentLargeItem = largeItem;
+                        } else {
+                            largeItem = currentLargeItem;
+                        }
+
+                        if (smallItem !== "") {
+                            currentSmallItem = smallItem;
+                        } else {
+                            smallItem = currentSmallItem;
                         }
 
                         // 평가방법 판별 ('Y', 'N'이 포함되어 있으면 우선적으로 적부항목, 그 외에 숫자가 있으면 점수항목)
