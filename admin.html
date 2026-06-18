@@ -813,19 +813,73 @@
                         return;
                     }
 
-                    // 1. 기존 데이터 삭제 (id > 0 조건으로 전체 삭제 수행)
-                    const { error: deleteError } = await db.from('evaluation_items').delete().gt('id', 0);
-                    if (deleteError) {
-                        throw new Error("기존 데이터 삭제 실패: " + deleteError.message);
+                    // 1. 현재 DB의 기존 항목들 조회
+                    const { data: existingItems, error: fetchError } = await db.from('evaluation_items').select('*');
+                    if (fetchError) {
+                        throw new Error("기존 데이터 조회 실패: " + fetchError.message);
                     }
 
-                    // 2. 신규 데이터 일괄 추가 (Bulk Insert)
-                    const { error: insertError } = await db.from('evaluation_items').insert(items);
-                    if (insertError) {
-                        throw new Error("신규 데이터 저장 실패: " + insertError.message);
+                    const toInsert = [];
+                    const toUpdate = [];
+                    const keepIds = new Set();
+
+                    items.forEach(csvItem => {
+                        // 대항목, 소항목, 기준이 모두 일치하는 기존 문항 탐색
+                        const matched = existingItems.find(ex => 
+                            ex.section === csvItem.section &&
+                            ex.large_item === csvItem.large_item &&
+                            ex.small_item === csvItem.small_item &&
+                            ex.standard === csvItem.standard
+                        );
+
+                        if (matched) {
+                            keepIds.add(matched.id);
+                            // 변경 사항이 있을 수 있으므로 업데이트 목록에 추가 (ID 유지)
+                            toUpdate.push({
+                                id: matched.id,
+                                ...csvItem
+                            });
+                        } else {
+                            toInsert.push(csvItem);
+                        }
+                    });
+
+                    // 2. 더 이상 CSV에 존재하지 않는 기존 항목 식별 및 삭제
+                    const toDeleteIds = existingItems
+                        .filter(ex => !keepIds.has(ex.id))
+                        .map(ex => ex.id);
+
+                    if (toDeleteIds.length > 0) {
+                        const { error: deleteError } = await db
+                            .from('evaluation_items')
+                            .delete()
+                            .in('id', toDeleteIds);
+                        if (deleteError) {
+                            throw new Error("안쓰는 항목 삭제 실패: " + deleteError.message);
+                        }
                     }
 
-                    alert(`성공적으로 ${items.length}개의 평가항목을 임포트했습니다.`);
+                    // 3. 업데이트 수행 (Upsert 기능 활용)
+                    if (toUpdate.length > 0) {
+                        const { error: updateError } = await db
+                            .from('evaluation_items')
+                            .upsert(toUpdate);
+                        if (updateError) {
+                            throw new Error("기존 항목 업데이트 실패: " + updateError.message);
+                        }
+                    }
+
+                    // 4. 신규 항목 추가
+                    if (toInsert.length > 0) {
+                        const { error: insertError } = await db
+                            .from('evaluation_items')
+                            .insert(toInsert);
+                        if (insertError) {
+                            throw new Error("신규 항목 저장 실패: " + insertError.message);
+                        }
+                    }
+
+                    alert(`성공적으로 평가항목을 임포트했습니다. (추가: ${toInsert.length}건, 업데이트: ${toUpdate.length}건, 삭제: ${toDeleteIds.length}건)`);
                     // UI에 변경된 평가항목 목록을 새로고침
                     fetchEvalItems();
 
@@ -1213,7 +1267,8 @@
             // 평가 항목의 실제 평가 기준 문장을 매핑하기 위해 전체 평가 항목 로드
             const { data: evalItems, error: itemsError } = await db
                 .from('evaluation_items')
-                .select('id, standard, large_item, small_item, compliance_criteria');
+                .select('id, standard, large_item, small_item, compliance_criteria')
+                .order('id', { ascending: true });
 
             if (itemsError) {
                 console.error('평가 항목을 불러오지 못했습니다:', itemsError);
@@ -1228,6 +1283,7 @@
 
             const content = document.getElementById('reportDetailContent');
             const details = report.details || {};
+            const sortedDetailKeys = Object.keys(details).map(k => parseInt(k)).sort((a, b) => a - b);
             
             let detailsHtml = `
                 <div class="card" style="background: #f8fafc; margin-bottom: 20px;">
@@ -1262,7 +1318,31 @@
                         <tbody>
                             ${Object.keys(details).map(key => {
                                 const itemDetail = details[key];
-                                const evalItem = itemMap[key] || {};
+                                
+                                // 다단계 복원 기법 (1: 스냅샷, 2: ID 매치, 3: 순서 매치)
+                                let evalItem = null;
+                                if (itemDetail.standard !== undefined) {
+                                    evalItem = {
+                                        large_item: itemDetail.large_item,
+                                        small_item: itemDetail.small_item,
+                                        standard: itemDetail.standard,
+                                        compliance_criteria: itemDetail.compliance_criteria
+                                    };
+                                } else if (itemMap[key]) {
+                                    evalItem = itemMap[key];
+                                } else {
+                                    const keyInt = parseInt(key);
+                                    const idx = sortedDetailKeys.indexOf(keyInt);
+                                    if (idx !== -1 && evalItems && evalItems[idx]) {
+                                        evalItem = evalItems[idx];
+                                    } else {
+                                        evalItem = {
+                                            large_item: '미확인 대항목',
+                                            small_item: '',
+                                            standard: '미확인 문항 (ID: ' + key + ')'
+                                        };
+                                    }
+                                }
                                 
                                 const options = parseOptions(evalItem.compliance_criteria);
                                 const matchedOption = options.find(o => o.value === itemDetail.status);
@@ -1366,9 +1446,18 @@
 
             const tbody = document.getElementById('editReportItemsBody');
             const details = report.details || {};
+            const sortedDetailKeys = Object.keys(details).map(k => parseInt(k)).sort((a, b) => a - b);
 
-            tbody.innerHTML = evalItems.map(item => {
-                const itemDetail = details[item.id] || { status: null, comment: '' };
+            tbody.innerHTML = evalItems.map((item, idx) => {
+                let itemDetail = { status: null, comment: '' };
+                if (details[item.id]) {
+                    itemDetail = details[item.id];
+                } else {
+                    const oldId = sortedDetailKeys[idx];
+                    if (oldId && details[oldId]) {
+                        itemDetail = details[oldId];
+                    }
+                }
                 const options = parseOptions(item.compliance_criteria);
                 const isOptional = (item.section && item.section.includes('(추가 사항)')) || (item.large_item && item.large_item.includes('(추가 사항)'));
                 const hasParentheses = item.section && item.section.includes('(') && item.section.includes(')');
@@ -1453,7 +1542,11 @@
 
                 details[item.id] = {
                     status: selectedValue,
-                    comment: commentVal
+                    comment: commentVal,
+                    large_item: item.large_item,
+                    small_item: item.small_item,
+                    standard: item.standard,
+                    compliance_criteria: item.compliance_criteria
                 };
 
                 // 점수 계산 (N/A 및 생략 건은 제외)

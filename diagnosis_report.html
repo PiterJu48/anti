@@ -219,26 +219,58 @@
             document.getElementById('res_y').innerText = compliantCount;
             document.getElementById('res_n').innerText = nonCompliantCount;
 
+            const details = data.details || {};
+            const sortedDetailKeys = Object.keys(details).map(k => parseInt(k)).sort((a, b) => a - b);
+
             const detailContainer = document.getElementById('res_details');
-            detailContainer.innerHTML = items.map(item => {
+            detailContainer.innerHTML = Object.keys(details).map(key => {
                 let status = 'NA';
                 let comment = '';
                 
+                let evalItem = null;
+                const itemDetail = details[key];
+                
                 if (type === 'official') {
-                    const detail = data.details[item.id];
-                    status = detail ? detail.status : 'NA';
-                    comment = detail ? detail.comment : '';
+                    status = itemDetail ? itemDetail.status : 'NA';
+                    comment = itemDetail ? itemDetail.comment : '';
+                    
+                    if (itemDetail && itemDetail.standard !== undefined) {
+                        evalItem = {
+                            large_item: itemDetail.large_item,
+                            small_item: itemDetail.small_item,
+                            standard: itemDetail.standard,
+                            compliance_criteria: itemDetail.compliance_criteria
+                        };
+                    }
                 } else {
-                    status = data.details[item.id] || 'N';
+                    status = itemDetail || 'N';
                 }
 
                 if (status === 'NA') return ''; // 공식 평가에서 NA는 제외
+                
+                if (!evalItem) {
+                    if (itemMap[key]) {
+                        evalItem = itemMap[key];
+                    } else {
+                        const keyInt = parseInt(key);
+                        const idx = sortedDetailKeys.indexOf(keyInt);
+                        if (idx !== -1 && items && items[idx]) {
+                            evalItem = items[idx];
+                        } else {
+                            evalItem = {
+                                large_item: '미확인 대항목',
+                                small_item: '',
+                                standard: '미확인 문항 (ID: ' + key + ')',
+                                compliance_criteria: ''
+                            };
+                        }
+                    }
+                }
 
-                const options = parseOptions(item.compliance_criteria);
+                const options = parseOptions(evalItem.compliance_criteria);
                 const matchedOption = options.find(o => o.value === status);
                 const statusText = matchedOption ? matchedOption.label : status;
                 
-                // 클래스 판별 (적합: Y이거나 0보다 큰 점수 획득 시)
                 let statusClass = 'status-n';
                 if (status === 'Y' || (status !== 'N' && !isNaN(parseFloat(status)) && parseFloat(status) > 0)) {
                     statusClass = 'status-y';
@@ -248,8 +280,8 @@
                     <div class="detail-item" style="flex-direction: column; align-items: flex-start;">
                         <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
                             <div style="flex: 1; padding-right: 15px;">
-                                <div style="font-weight: 600; font-size: 0.9rem;">[${item.large_item}] ${item.small_item ? item.small_item : ''}</div>
-                                <div style="font-size: 0.8rem; color: #666; margin-top: 2px;">${item.standard}</div>
+                                <div style="font-weight: 600; font-size: 0.9rem;">[${evalItem.large_item || '-'}] ${evalItem.small_item ? evalItem.small_item : ''}</div>
+                                <div style="font-size: 0.8rem; color: #666; margin-top: 2px;">${evalItem.standard}</div>
                             </div>
                             <div class="${statusClass}" style="font-size: 0.9rem; text-align: right; min-width: 120px; white-space: normal;">
                                 ${statusText}
