@@ -1207,12 +1207,18 @@
             renderResults(filtered);
         }
 
+        function getEvaluatorName(evaluatorId) {
+            const users = window.auth.accounts.getAll();
+            const user = users.find(u => u.id === evaluatorId);
+            return user ? `${user.name} (${evaluatorId})` : evaluatorId;
+        }
+
         function renderResults(results) {
             const list = document.getElementById('resultsList');
             list.innerHTML = results.map(report => `
                 <tr>
                     <td>${report.farms ? report.farms.name : '알 수 없음'}</td>
-                    <td>${report.evaluator_id}</td>
+                    <td>${getEvaluatorName(report.evaluator_id)}</td>
                     <td><span style="font-weight: bold; color: ${report.score >= 80 ? '#2c7a7b' : '#e53e3e'}">${report.score}점</span></td>
                     <td>${new Date(report.created_at).toLocaleString()}</td>
                     <td>
@@ -1294,7 +1300,7 @@
                             <p><strong>주소:</strong> ${report.farms ? report.farms.address : '-'}</p>
                         </div>
                         <div>
-                            <p><strong>평가자:</strong> ${report.evaluator_id}</p>
+                            <p><strong>평가자:</strong> ${getEvaluatorName(report.evaluator_id)}</p>
                             <p><strong>평가 점수:</strong> <span style="font-size: 1.2rem; font-weight: bold; color: var(--primary-color);">${report.score}점</span></p>
                             <p><strong>평가 일시:</strong> ${new Date(report.created_at).toLocaleString()}</p>
                         </div>
