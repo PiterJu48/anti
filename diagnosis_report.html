@@ -234,12 +234,12 @@
                     status = itemDetail ? itemDetail.status : 'NA';
                     comment = itemDetail ? itemDetail.comment : '';
                     
-                    if (itemDetail && itemDetail.standard !== undefined) {
+                    if (itemDetail && itemDetail.standard !== undefined && itemDetail.standard !== null && String(itemDetail.standard).trim() !== '') {
                         evalItem = {
-                            large_item: itemDetail.large_item,
-                            small_item: itemDetail.small_item,
+                            large_item: itemDetail.large_item || '미확인 대항목',
+                            small_item: itemDetail.small_item || '',
                             standard: itemDetail.standard,
-                            compliance_criteria: itemDetail.compliance_criteria
+                            compliance_criteria: itemDetail.compliance_criteria || ''
                         };
                     }
                 } else {

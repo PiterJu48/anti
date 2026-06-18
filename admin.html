@@ -1343,14 +1343,14 @@
                             ${Object.keys(details).map(key => {
                                 const itemDetail = details[key];
                                 
-                                // 다단계 복원 기법 (1: 스냅샷, 2: ID 매치, 3: 순서 매치)
+                                // 다단계 복원 기법 (1: 스냅샷 우선 적용, 2: ID 매치, 3: 순서 매치)
                                 let evalItem = null;
-                                if (itemDetail.standard !== undefined) {
+                                if (itemDetail && itemDetail.standard !== undefined && itemDetail.standard !== null && String(itemDetail.standard).trim() !== '') {
                                     evalItem = {
-                                        large_item: itemDetail.large_item,
-                                        small_item: itemDetail.small_item,
+                                        large_item: itemDetail.large_item || '미확인 대항목',
+                                        small_item: itemDetail.small_item || '',
                                         standard: itemDetail.standard,
-                                        compliance_criteria: itemDetail.compliance_criteria
+                                        compliance_criteria: itemDetail.compliance_criteria || ''
                                     };
                                 } else if (itemMap[key]) {
                                     evalItem = itemMap[key];
@@ -1363,7 +1363,8 @@
                                         evalItem = {
                                             large_item: '미확인 대항목',
                                             small_item: '',
-                                            standard: '미확인 문항 (ID: ' + key + ')'
+                                            standard: '미확인 문항 (ID: ' + key + ')',
+                                            compliance_criteria: ''
                                         };
                                     }
                                 }
