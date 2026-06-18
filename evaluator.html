@@ -176,6 +176,7 @@
             showTab('assigned');
         });
         const db = window.auth.supabase;
+        const currentEvaluatorId = localStorage.getItem('user_id');
 
         // 평가 상태를 저장할 전역 변수들
         let evaluationItems = [];      // 모든 평가 항목 원본 데이터
@@ -1009,7 +1010,7 @@
         // 최종 보고서 제출 처리
         async function submitOfficialEvaluation() {
             const farmId = document.getElementById('targetFarm').value;
-            const evaluatorId = localStorage.getItem('user_id');
+            const evaluatorId = currentEvaluatorId;
             const summary = window.overallSummaryValue || "";
 
             // 특수 문항 측정값 개수 최종 재검증
