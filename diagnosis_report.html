@@ -119,6 +119,32 @@
     <script>
         const db = window.auth.supabase;
 
+        // 적합 기준 텍스트를 파싱하여 라디오 버튼 옵션 배열로 반환하는 함수
+        function parseOptions(criteriaText) {
+            if (!criteriaText || criteriaText.trim() === "") {
+                return [
+                    { value: "Y", label: "Y: 적합" },
+                    { value: "N", label: "N: 부적합" }
+                ];
+            }
+            const lines = criteriaText.split('\n');
+            const options = [];
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed) return;
+                
+                const colonIndex = trimmed.indexOf(':');
+                if (colonIndex > 0) {
+                    const val = trimmed.substring(0, colonIndex).trim();
+                    const desc = trimmed.substring(colonIndex + 1).trim();
+                    options.push({ value: val, label: `${val}: ${desc}` });
+                } else {
+                    options.push({ value: trimmed, label: trimmed });
+                }
+            });
+            return options;
+        }
+
         async function loadReport() {
             const urlParams = new URLSearchParams(window.location.search);
             const id = urlParams.get('id');
@@ -151,14 +177,39 @@
                 document.getElementById('res_comment').innerText = message;
             }
 
-            // 적합/부적합 통계 계산 (official은 compliant_count가 없을 수 있으므로 details 기반 계산)
+            // 상세 내역 매핑을 위해 평가항목 다시 로드
+            const { data: items } = await db.from('evaluation_items').select('id, large_item, small_item, standard, compliance_criteria').order('id', { ascending: true });
+            
+            const itemMap = items.reduce((acc, item) => {
+                acc[item.id] = item;
+                return acc;
+            }, {});
+
+            // 적합/부적합 통계 계산
             let compliantCount = 0;
             let nonCompliantCount = 0;
 
             if (type === 'official') {
-                Object.values(data.details).forEach(val => {
-                    if (val.status === 'Y') compliantCount++;
-                    else if (val.status === 'N') nonCompliantCount++;
+                Object.entries(data.details).forEach(([itemId, val]) => {
+                    const item = itemMap[itemId];
+                    if (!item) return;
+                    
+                    const options = parseOptions(item.compliance_criteria);
+                    const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+                    
+                    if (numericValues.length > 0) {
+                        // 점수형 문항의 경우 최고점이면 적합, 아니면 부적합으로 요약 통계 처리
+                        const maxVal = Math.max(...numericValues);
+                        const earnedVal = parseFloat(val.status);
+                        if (!isNaN(earnedVal) && earnedVal === maxVal) {
+                            compliantCount++;
+                        } else {
+                            nonCompliantCount++;
+                        }
+                    } else {
+                        if (val.status === 'Y') compliantCount++;
+                        else if (val.status === 'N') nonCompliantCount++;
+                    }
                 });
             } else {
                 compliantCount = data.compliant_count;
@@ -168,9 +219,6 @@
             document.getElementById('res_y').innerText = compliantCount;
             document.getElementById('res_n').innerText = nonCompliantCount;
 
-            // 상세 내역 매핑을 위해 평가항목 다시 로드
-            const { data: items } = await db.from('evaluation_items').select('id, large_item, small_item, standard').order('id', { ascending: true });
-            
             const detailContainer = document.getElementById('res_details');
             detailContainer.innerHTML = items.map(item => {
                 let status = 'NA';
@@ -184,17 +232,27 @@
                     status = data.details[item.id] || 'N';
                 }
 
-                if (status === 'NA') return ''; // 공식 평가에서 NA는 제외하거나 다르게 표시 가능
+                if (status === 'NA') return ''; // 공식 평가에서 NA는 제외
+
+                const options = parseOptions(item.compliance_criteria);
+                const matchedOption = options.find(o => o.value === status);
+                const statusText = matchedOption ? matchedOption.label : status;
+                
+                // 클래스 판별 (적합: Y이거나 0보다 큰 점수 획득 시)
+                let statusClass = 'status-n';
+                if (status === 'Y' || (status !== 'N' && !isNaN(parseFloat(status)) && parseFloat(status) > 0)) {
+                    statusClass = 'status-y';
+                }
 
                 return `
                     <div class="detail-item" style="flex-direction: column; align-items: flex-start;">
                         <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-                            <div style="flex: 1;">
-                                <div style="font-weight: 600; font-size: 0.9rem;">${item.large_item} ${item.small_item ? '- ' + item.small_item : ''}</div>
-                                <div style="font-size: 0.8rem; color: #666;">${item.standard}</div>
+                            <div style="flex: 1; padding-right: 15px;">
+                                <div style="font-weight: 600; font-size: 0.9rem;">[${item.large_item}] ${item.small_item ? item.small_item : ''}</div>
+                                <div style="font-size: 0.8rem; color: #666; margin-top: 2px;">${item.standard}</div>
                             </div>
-                            <div class="${status === 'Y' ? 'status-y' : 'status-n'}">
-                                ${status === 'Y' ? '적합' : (status === 'N' ? '부적합' : 'N/A')}
+                            <div class="${statusClass}" style="font-size: 0.9rem; text-align: right; min-width: 120px; white-space: normal;">
+                                ${statusText}
                             </div>
                         </div>
                         ${comment ? `<div style="font-size: 0.8rem; background: #fff5f5; padding: 5px 10px; border-radius: 4px; margin-top: 5px; width: 100%;">의견: ${comment}</div>` : ''}

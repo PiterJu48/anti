@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="auth.js"></script>
+    <!-- SheetJS 라이브러리 추가 (Excel 내보내기용) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -79,28 +81,21 @@
 
                 <section class="mt-20">
                     <div class="card" style="width: 100%;">
-                        <h3><i class="fas fa-list"></i> 최근 인증 심사 현황</h3>
+                        <h3><i class="fas fa-clipboard-list"></i> 심사대상</h3>
                         <div class="table-responsive">
                             <table class="data-table">
                                 <thead>
                                     <tr>
-                                        <th>신청번호</th>
                                         <th>농장명</th>
-                                        <th>축종</th>
-                                        <th>평가원</th>
+                                        <th>대표자</th>
+                                        <th>심사유형</th>
+                                        <th>평가일시</th>
                                         <th>상태</th>
-                                        <th>일자</th>
+                                        <th>관리</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>2024-0012</td>
-                                        <td>푸른들 농장</td>
-                                        <td>산란계</td>
-                                        <td>김철수</td>
-                                        <td><span class="status-badge status-process">현장평가 중</span></td>
-                                        <td>2024-04-15</td>
-                                    </tr>
+                                <tbody id="auditTargetList">
+                                    <!-- JS로 동적 생성 -->
                                 </tbody>
                             </table>
                         </div>
@@ -231,6 +226,36 @@
                 </div>
             </div>
 
+            <!-- 심사 설정 모달 -->
+            <div id="auditModal" class="modal">
+                <div class="modal-content" style="width: 500px;">
+                    <h2>심사 정보 설정</h2>
+                    <form id="auditForm" class="mt-20">
+                        <input type="hidden" id="auditFarmId">
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>농장명</label>
+                            <input type="text" id="auditFarmName" readonly style="background: #f1f5f9; cursor: not-allowed; width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>심사유형</label>
+                            <select id="auditType" required style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box;">
+                                <option value="신규">신규</option>
+                                <option value="사후관리">사후관리</option>
+                                <option value="갱신">갱신</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label>평가일시</label>
+                            <input type="datetime-local" id="auditEvalDate" required style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box;">
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                            <button type="button" class="logout-btn" onclick="closeAuditModal()">취소</button>
+                            <button type="submit" class="btn-primary">저장하기</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <!-- 평가항목 관리 탭 -->
             <div id="eval_itemsTab" class="tab-content" style="display: none;">
                 <section class="card">
@@ -306,6 +331,35 @@
                         <h3><i class="fas fa-file-alt"></i> 평가결과 목록</h3>
                         <button class="btn-primary" onclick="fetchResults()"><i class="fas fa-sync-alt"></i> 새로고침</button>
                     </div>
+
+                    <!-- 검색 필터 영역 추가 -->
+                    <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-weight: 500; font-size: 0.9rem;">제출 연도:</label>
+                            <select id="searchYear" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem;">
+                                <option value="">전체 연도</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-weight: 500; font-size: 0.9rem;">농장명:</label>
+                            <select id="searchFarm" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem;">
+                                <option value="">전체 농장</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-weight: 500; font-size: 0.9rem;">농장주명:</label>
+                            <select id="searchOwner" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem;">
+                                <option value="">전체 농장주</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-weight: 500; font-size: 0.9rem;">평가자:</label>
+                            <select id="searchEvaluator" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem;">
+                                <option value="">전체 평가자</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" style="padding: 8px 20px; margin-left: auto;" onclick="filterResults()"><i class="fas fa-search"></i> 검색</button>
+                    </div>
                     <div class="table-responsive">
                         <table class="data-table">
                             <thead>
@@ -333,9 +387,49 @@
                     <div id="reportDetailContent">
                         <!-- 상세 내용이 여기에 동적으로 생성됨 -->
                     </div>
-                    <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
-                        <button class="btn-primary" onclick="closeResultsModal()">확인</button>
+                    <div id="detailModalActions" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                        <!-- JS로 동적 생성 -->
                     </div>
+                </div>
+            </div>
+
+            <!-- 평가결과 수정 모달 -->
+            <div id="editReportModal" class="modal">
+                <div class="modal-content" style="width: 90%; max-width: 1000px; max-height: 80vh; overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>평가 결과 수정</h2>
+                        <button class="logout-btn" onclick="closeEditReportModal()">닫기</button>
+                    </div>
+                    <form id="editReportForm">
+                        <input type="hidden" id="editReportId">
+                        <div class="card" style="background: #f8fafc; margin-bottom: 20px; padding: 20px;">
+                            <p><strong>농장명:</strong> <span id="editReportFarmName">-</span></p>
+                            <div class="form-group" style="margin-top: 15px;">
+                                <label><strong>종합 의견</strong></label>
+                                <textarea id="editReportSummary" style="width: 100%; height: 80px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; margin-top: 5px; box-sizing: border-box;"></textarea>
+                            </div>
+                        </div>
+                        
+                        <h3>항목별 결과 수정</h3>
+                        <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50%;">평가 기준</th>
+                                        <th style="width: 25%; text-align: center;">결과 선택</th>
+                                        <th style="width: 25%;">평가 의견</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="editReportItemsBody">
+                                    <!-- JS로 입력/선택 폼 동적 렌더링 -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                            <button type="button" class="logout-btn" onclick="closeEditReportModal()">취소</button>
+                            <button type="submit" class="btn-primary">저장하기</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </main>
@@ -413,6 +507,7 @@
             const pageTitle = document.getElementById('pageTitle');
             if (pageTitle) pageTitle.innerText = titleMap[tabName];
 
+            if (tabName === 'dashboard') fetchAuditTargets();
             if (tabName === 'farms') fetchFarms();
             if (tabName === 'users') fetchUsers();
             if (tabName === 'eval_items') fetchEvalItems();
@@ -538,13 +633,13 @@
             }
         });
 
-        // 적합기준 입력 시 평가방법 자동 선택 (숫자면 점수항목, 아니면 적부항목)
+        // 적합기준 입력 시 평가방법 자동 선택
         document.getElementById('ei_compliance').addEventListener('input', (e) => {
-            const val = e.target.value.trim();
-            if (val !== '' && !isNaN(val)) {
-                document.getElementById('ei_eval_method').value = '점수항목';
-            } else if (val !== '') {
+            const val = e.target.value.trim().toUpperCase();
+            if (/[YN]/.test(val)) {
                 document.getElementById('ei_eval_method').value = '적부항목';
+            } else if (/\d/.test(val)) {
+                document.getElementById('ei_eval_method').value = '점수항목';
             }
         });
 
@@ -637,12 +732,41 @@
                     }
 
                     const rows = parseCSV(text);
+                    
+                    // 자동 시프트 감지: 데이터 행들의 첫 번째 컬럼이 일관되게 비어있는지 감지
+                    let isShifted = false;
+                    for (let i = 0; i < rows.length; i++) {
+                        const row = rows[i];
+                        if (!row || row.length < 2) continue;
+                        const col0 = row[0].trim();
+                        // 섹션 헤더나 완전히 비어있는 행은 제외
+                        if (col0.startsWith('□') || row.join('').trim() === '') continue;
+                        if (row[1] && row[1].trim().startsWith('□')) {
+                            isShifted = true;
+                            break;
+                        }
+                        if (col0 === '') {
+                            isShifted = true;
+                        }
+                        break;
+                    }
+
                     const items = [];
                     let currentSection = "일반기준";
 
                     for (let i = 0; i < rows.length; i++) {
                         const row = rows[i];
-                        if (!row || row.length < 3) continue;
+                        if (!row || row.length < 2) continue;
+
+                        // 전체가 다 비어있으면 건너뜀
+                        if (row.join('').trim() === '') continue;
+
+                        // 시프트 감지 시 빈 첫 번째 컬럼 제거
+                        if (isShifted) {
+                            if (row[0].trim() === '') {
+                                row.shift();
+                            }
+                        }
 
                         const col0 = row[0].trim();
 
@@ -662,9 +786,12 @@
                             continue;
                         }
 
-                        // 평가방법 판별 (적합기준에 숫자가 있거나 결과에 물결 표시/숫자가 있으면 점수항목으로 처리)
+                        // 평가방법 판별 ('Y', 'N'이 포함되어 있으면 우선적으로 적부항목, 그 외에 숫자가 있으면 점수항목)
                         let evalMethod = "적부항목";
-                        if ((compliance && !isNaN(compliance.trim())) || (result && (result.includes("~") || !isNaN(result.trim())))) {
+                        const combinedText = (compliance + " " + result).toUpperCase();
+                        if (/[YN]/.test(combinedText)) {
+                            evalMethod = "적부항목";
+                        } else if (/\d/.test(combinedText)) {
                             evalMethod = "점수항목";
                         }
 
@@ -678,6 +805,7 @@
                             eval_method: evalMethod
                         });
                     }
+
 
                     if (items.length === 0) {
                         alert("임포트할 유효한 데이터가 없습니다.");
@@ -833,7 +961,23 @@
             document.getElementById('address').value = farm.address;
             document.getElementById('facilityScale').value = farm.facility_scale || '';
             document.getElementById('phoneNumber').value = farm.phone_number || '';
-            document.getElementById('remarks').value = farm.remarks || '';
+            
+            // remarks 파싱
+            let remarksData = { notes: '', audit_type: '', eval_date: '' };
+            try {
+                if (farm.remarks && farm.remarks.trim().startsWith('{')) {
+                    remarksData = JSON.parse(farm.remarks);
+                } else {
+                    remarksData.notes = farm.remarks || '';
+                }
+            } catch (e) {
+                remarksData.notes = farm.remarks || '';
+            }
+            document.getElementById('remarks').value = remarksData.notes || '';
+            
+            // 임시 저장을 위해 전역에 킵
+            window.currentFarmAuditType = remarksData.audit_type || '';
+            window.currentFarmEvalDate = remarksData.eval_date || '';
             
             document.getElementById('farmModal').style.display = 'block';
         }
@@ -856,13 +1000,26 @@
         document.getElementById('farmForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = document.getElementById('farmId').value;
+            
+            let remarksValue = document.getElementById('remarks').value;
+            if (id) {
+                // 수정 시 기존 audit_type, eval_date가 유실되지 않도록 JSON 유지
+                const auditType = window.currentFarmAuditType || '';
+                const evalDate = window.currentFarmEvalDate || '';
+                remarksValue = JSON.stringify({
+                    notes: remarksValue,
+                    audit_type: auditType,
+                    eval_date: evalDate
+                });
+            }
+
             const farmData = {
                 name: document.getElementById('farmName').value,
                 representative: document.getElementById('representative').value,
                 address: document.getElementById('address').value,
                 facility_scale: document.getElementById('facilityScale').value,
                 phone_number: document.getElementById('phoneNumber').value,
-                remarks: document.getElementById('remarks').value
+                remarks: remarksValue
             };
 
             let error;
@@ -892,11 +1049,12 @@
 
         // 평가 결과 데이터 로드
         async function fetchResults() {
+            // farms 테이블에서 대표자(농장주명)를 가져오기 위해 대표자 컬럼도 포함해서 로드
             const { data, error } = await db
                 .from('evaluation_reports')
                 .select(`
                     *,
-                    farms ( name )
+                    farms ( name, representative )
                 `)
                 .order('created_at', { ascending: false });
 
@@ -904,7 +1062,95 @@
                 console.error('Error fetching results:', error);
                 return;
             }
-            renderResults(data);
+
+            // 검색 필터를 위해 전체 평가 결과를 전역에 보관
+            window.allReports = data;
+
+            // 1. 제출일시에서 고유 연도(Year)들을 추출하여 드롭다운 구성
+            const years = [...new Set(data.map(report => {
+                if (!report.created_at) return null;
+                return new Date(report.created_at).getFullYear();
+            }).filter(y => y !== null))].sort((a, b) => b - a);
+
+            const yearSelect = document.getElementById('searchYear');
+            if (yearSelect) {
+                const currentVal = yearSelect.value;
+                yearSelect.innerHTML = '<option value="">전체 연도</option>' + 
+                    years.map(y => `<option value="${y}">${y}년</option>`).join('');
+                yearSelect.value = currentVal;
+            }
+
+            // 2. 결과 데이터에서 고유 농장명 추출 및 드롭다운 구성
+            const farmNames = [...new Set(data.map(r => r.farms ? r.farms.name : '').filter(name => name !== ''))].sort();
+            const farmSelect = document.getElementById('searchFarm');
+            if (farmSelect) {
+                const currentVal = farmSelect.value;
+                farmSelect.innerHTML = '<option value="">전체 농장</option>' + 
+                    farmNames.map(name => `<option value="${name}">${name}</option>`).join('');
+                farmSelect.value = currentVal;
+            }
+
+            // 3. 결과 데이터에서 고유 농장주명(대표자) 추출 및 드롭다운 구성
+            const owners = [...new Set(data.map(r => r.farms ? r.farms.representative : '').filter(rep => rep !== ''))].sort();
+            const ownerSelect = document.getElementById('searchOwner');
+            if (ownerSelect) {
+                const currentVal = ownerSelect.value;
+                ownerSelect.innerHTML = '<option value="">전체 농장주</option>' + 
+                    owners.map(owner => `<option value="${owner}">${owner}</option>`).join('');
+                ownerSelect.value = currentVal;
+            }
+
+            // 4. 결과 데이터에서 고유 평가자 ID 추출 및 드롭다운 구성
+            const evaluators = [...new Set(data.map(r => r.evaluator_id).filter(id => id !== ''))].sort();
+            const evaluatorSelect = document.getElementById('searchEvaluator');
+            if (evaluatorSelect) {
+                const currentVal = evaluatorSelect.value;
+                evaluatorSelect.innerHTML = '<option value="">전체 평가자</option>' + 
+                    evaluators.map(id => `<option value="${id}">${id}</option>`).join('');
+                evaluatorSelect.value = currentVal;
+            }
+
+            filterResults();
+        }
+
+        // 검색 필터 및 렌더링 핸들러
+        function filterResults() {
+            if (!window.allReports) return;
+
+            const targetYear = document.getElementById('searchYear').value;
+            const targetFarm = document.getElementById('searchFarm').value;
+            const targetOwner = document.getElementById('searchOwner').value;
+            const targetEvaluator = document.getElementById('searchEvaluator').value;
+
+            const filtered = window.allReports.filter(report => {
+                // 1. 연도 필터링
+                if (targetYear) {
+                    if (!report.created_at) return false;
+                    const reportYear = String(new Date(report.created_at).getFullYear());
+                    if (reportYear !== targetYear) return false;
+                }
+
+                // 2. 농장명 필터링
+                if (targetFarm) {
+                    const farmName = report.farms ? report.farms.name : '';
+                    if (farmName !== targetFarm) return false;
+                }
+
+                // 3. 농장주명 필터링
+                if (targetOwner) {
+                    const ownerName = report.farms ? report.farms.representative : '';
+                    if (ownerName !== targetOwner) return false;
+                }
+
+                // 4. 평가자 ID 필터링
+                if (targetEvaluator) {
+                    if (report.evaluator_id !== targetEvaluator) return false;
+                }
+
+                return true;
+            });
+
+            renderResults(filtered);
         }
 
         function renderResults(results) {
@@ -916,10 +1162,37 @@
                     <td><span style="font-weight: bold; color: ${report.score >= 80 ? '#2c7a7b' : '#e53e3e'}">${report.score}점</span></td>
                     <td>${new Date(report.created_at).toLocaleString()}</td>
                     <td>
-                        <button class="logout-btn" style="padding: 4px 8px;" onclick="viewReportDetail(${report.id})">상세보기</button>
+                        <button class="logout-btn" style="padding: 4px 8px; color: var(--primary-color); border-color: var(--primary-color);" onclick="viewReportDetail(${report.id})">바로보기</button>
+                        <button class="btn-primary" style="padding: 4px 8px; font-size: 0.8rem; background-color: #2c7a7b;" onclick="exportToExcel(${report.id})"><i class="fas fa-file-excel"></i> 엑셀 다운로드</button>
                     </td>
                 </tr>
             `).join('');
+        }
+
+        // 적합 기준 텍스트를 파싱하여 라디오 버튼 옵션 배열로 반환하는 함수
+        function parseOptions(criteriaText) {
+            if (!criteriaText || criteriaText.trim() === "") {
+                return [
+                    { value: "Y", label: "Y: 적합" },
+                    { value: "N", label: "N: 부적합" }
+                ];
+            }
+            const lines = criteriaText.split('\n');
+            const options = [];
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed) return;
+                
+                const colonIndex = trimmed.indexOf(':');
+                if (colonIndex > 0) {
+                    const val = trimmed.substring(0, colonIndex).trim();
+                    const desc = trimmed.substring(colonIndex + 1).trim();
+                    options.push({ value: val, label: `${val}: ${desc}` });
+                } else {
+                    options.push({ value: trimmed, label: trimmed });
+                }
+            });
+            return options;
         }
 
         async function viewReportDetail(reportId) {
@@ -940,7 +1213,7 @@
             // 평가 항목의 실제 평가 기준 문장을 매핑하기 위해 전체 평가 항목 로드
             const { data: evalItems, error: itemsError } = await db
                 .from('evaluation_items')
-                .select('id, standard, large_item, small_item');
+                .select('id, standard, large_item, small_item, compliance_criteria');
 
             if (itemsError) {
                 console.error('평가 항목을 불러오지 못했습니다:', itemsError);
@@ -981,9 +1254,9 @@
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th style="width: 55%;">평가 기준</th>
-                                <th style="width: 15%; text-align: center;">결과</th>
-                                <th style="width: 30%;">평가 의견</th>
+                                <th style="width: 50%;">평가 기준</th>
+                                <th style="width: 25%; text-align: center;">결과</th>
+                                <th style="width: 25%;">평가 의견</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -991,15 +1264,19 @@
                                 const itemDetail = details[key];
                                 const evalItem = itemMap[key] || {};
                                 
-                                // status 값에 맞추어 적합/부적합/NA 텍스트 및 스타일 맵 설정
-                                const statusMap = { 'Y': '적합', 'N': '부적합', 'NA': 'N/A' };
-                                const statusText = statusMap[itemDetail.status] || itemDetail.status || '-';
+                                const options = parseOptions(evalItem.compliance_criteria);
+                                const matchedOption = options.find(o => o.value === itemDetail.status);
+                                const statusText = matchedOption ? matchedOption.label : (itemDetail.status || '-');
                                 
                                 // 상태별 뱃지 스타일 분기
                                 let badgeClass = '';
-                                if (itemDetail.status === 'Y') badgeClass = 'status-completed';
-                                else if (itemDetail.status === 'N') badgeClass = 'status-pending'; // 대기/보류 색 활용 (오렌지/적색 계열)
-                                else badgeClass = 'status-process'; // 블루 계열
+                                if (itemDetail.status === 'Y' || (itemDetail.status !== 'N' && !isNaN(parseFloat(itemDetail.status)) && parseFloat(itemDetail.status) > 0)) {
+                                    badgeClass = 'status-completed'; // 녹색 (적합 혹은 0점 초과)
+                                } else if (itemDetail.status === 'N' || itemDetail.status === '0') {
+                                    badgeClass = 'status-pending'; // 적색/오렌지 (부적합 혹은 0점)
+                                } else {
+                                    badgeClass = 'status-process'; // 블루 (NA 등)
+                                }
                                 
                                 return `
                                     <tr>
@@ -1010,7 +1287,7 @@
                                             ${evalItem.standard || '미확인 문항 (ID: ' + key + ')'}
                                         </td>
                                         <td style="text-align: center; vertical-align: middle;">
-                                            <span class="status-badge ${badgeClass}" style="font-size: 0.8rem; padding: 4px 10px;">
+                                            <span class="status-badge ${badgeClass}" style="font-size: 0.8rem; padding: 4px 10px; display: inline-block; white-space: normal; max-width: 150px; text-align: left;">
                                                 ${statusText}
                                             </span>
                                         </td>
@@ -1026,6 +1303,17 @@
             `;
             
             content.innerHTML = detailsHtml;
+
+            // 수정 및 삭제 버튼 동적 생성
+            const actionsContainer = document.getElementById('detailModalActions');
+            if (actionsContainer) {
+                actionsContainer.innerHTML = `
+                    <button class="logout-btn" style="color: red; border-color: red; padding: 10px 20px;" onclick="deleteReport(${report.id})">삭제</button>
+                    <button class="btn-primary" style="padding: 10px 20px; background: #3182ce;" onclick="openEditReport(${JSON.stringify(report).replace(/"/g, '&quot;')})">수정</button>
+                    <button class="btn-primary" style="padding: 10px 20px;" onclick="closeResultsModal()">확인</button>
+                `;
+            }
+
             document.getElementById('resultsDetailModal').style.display = 'block';
         }
 
@@ -1033,7 +1321,333 @@
             document.getElementById('resultsDetailModal').style.display = 'none';
         }
 
+        // 평가결과 삭제 기능
+        async function deleteReport(reportId) {
+            if (!confirm('정말 이 평가결과를 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.')) {
+                return;
+            }
+            try {
+                const { error } = await db.from('evaluation_reports').delete().eq('id', reportId);
+                if (error) throw error;
+                
+                alert('평가결과가 삭제되었습니다.');
+                closeResultsModal();
+                fetchResults();
+                fetchAuditTargets(); // 대시보드 상태 자동 갱신용
+            } catch (e) {
+                alert('평가결과 삭제 실패: ' + e.message);
+            }
+        }
+
+        // 수정용 전역 데이터 홀더
+        let currentEditingReport = null;
+        let currentEvalItemsList = [];
+
+        // 평가결과 수정 모달 열기
+        async function openEditReport(report) {
+            closeResultsModal(); // 상세보기 모달 닫기
+            currentEditingReport = report;
+
+            document.getElementById('editReportId').value = report.id;
+            document.getElementById('editReportFarmName').innerText = report.farms ? report.farms.name : '-';
+            document.getElementById('editReportSummary').value = report.summary || '';
+
+            // 전체 평가 항목 정보 가져오기
+            const { data: evalItems, error: itemsError } = await db
+                .from('evaluation_items')
+                .select('*')
+                .order('id', { ascending: true });
+
+            if (itemsError) {
+                alert('평가 항목을 가져오는데 실패했습니다: ' + itemsError.message);
+                return;
+            }
+            currentEvalItemsList = evalItems;
+
+            const tbody = document.getElementById('editReportItemsBody');
+            const details = report.details || {};
+
+            tbody.innerHTML = evalItems.map(item => {
+                const itemDetail = details[item.id] || { status: null, comment: '' };
+                const options = parseOptions(item.compliance_criteria);
+                const isOptional = (item.section && item.section.includes('(추가 사항)')) || (item.large_item && item.large_item.includes('(추가 사항)'));
+                const hasParentheses = item.section && item.section.includes('(') && item.section.includes(')');
+
+                // 라디오 옵션 렌더링
+                const optionsHtml = options.map(opt => {
+                    const checked = itemDetail.status === opt.value ? 'checked' : '';
+                    return `
+                        <label style="margin-right: 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                            <input type="radio" name="edit_item_${item.id}" value="${opt.value}" ${checked}>
+                            <span>${opt.label}</span>
+                        </label>
+                    `;
+                }).join('');
+
+                // 추가 사항 또는 괄호 포함 섹션의 경우 N/A 선택지 노출
+                const naHtml = (isOptional || hasParentheses) ? `
+                    <label style="margin-right: 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; color: #718096; font-weight: 500;">
+                        <input type="radio" name="edit_item_${item.id}" value="N/A" ${itemDetail.status === 'N/A' || itemDetail.status === null ? 'checked' : ''}>
+                        <span>N/A (생략)</span>
+                    </label>
+                ` : '';
+
+                return `
+                    <tr>
+                        <td style="font-size: 0.85rem; line-height: 1.4;">
+                            <span style="font-weight: 700; color: #4a5568; display: block; margin-bottom: 2px;">
+                                [${item.large_item}] ${item.small_item || ''}
+                            </span>
+                            ${item.standard}
+                        </td>
+                        <td>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                ${optionsHtml}
+                                ${naHtml}
+                            </div>
+                        </td>
+                        <td>
+                            <input type="text" id="edit_comm_${item.id}" value="${itemDetail.comment || ''}" style="width: 100%; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box;">
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('editReportModal').style.display = 'block';
+        }
+
+        // 평가결과 수정 모달 닫기
+        function closeEditReportModal() {
+            document.getElementById('editReportModal').style.display = 'none';
+        }
+
+        // 평가결과 수정 저장 핸들러
+        document.getElementById('editReportForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const reportId = document.getElementById('editReportId').value;
+            const summary = document.getElementById('editReportSummary').value;
+
+            let earnedPoints = 0;
+            let maxPoints = 0;
+            const details = {};
+
+            // 문항별 변경 내용 검증 및 점수 재계산
+            for (let item of currentEvalItemsList) {
+                const radios = document.getElementsByName(`edit_item_${item.id}`);
+                let selectedValue = null;
+                for (let radio of radios) {
+                    if (radio.checked) {
+                        selectedValue = radio.value;
+                        break;
+                    }
+                }
+
+                const commentVal = document.getElementById(`edit_comm_${item.id}`).value;
+
+                // 필수 항목인데 미선택된 경우 체크
+                const isOptional = (item.section && item.section.includes('(추가 사항)')) || (item.large_item && item.large_item.includes('(추가 사항)'));
+                if (selectedValue === null && !isOptional) {
+                    alert(`평가 기준 '${item.standard}' 문항을 선택해 주세요.`);
+                    return;
+                }
+
+                details[item.id] = {
+                    status: selectedValue,
+                    comment: commentVal
+                };
+
+                // 점수 계산 (N/A 및 생략 건은 제외)
+                if (selectedValue !== null && selectedValue !== 'N/A') {
+                    const options = parseOptions(item.compliance_criteria);
+                    const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+
+                    if (numericValues.length > 0) {
+                        // 점수형 문항
+                        const maxVal = Math.max(...numericValues);
+                        let earnedVal = parseFloat(selectedValue);
+                        if (isNaN(earnedVal)) {
+                            earnedVal = 0;
+                        }
+                        earnedPoints += earnedVal;
+                        maxPoints += maxVal;
+                    } else {
+                        // 적부형 문항
+                        if (selectedValue === 'Y') {
+                            earnedPoints += 1;
+                            maxPoints += 1;
+                        } else if (selectedValue === 'N') {
+                            maxPoints += 1;
+                        }
+                    }
+                }
+            }
+
+            const score = maxPoints > 0 ? Math.round((earnedPoints / maxPoints) * 100) : 0;
+
+            try {
+                const { error } = await db
+                    .from('evaluation_reports')
+                    .update({
+                        summary: summary,
+                        score: score,
+                        details: details
+                    })
+                    .eq('id', reportId);
+
+                if (error) throw error;
+
+                alert('평가결과가 성공적으로 수정되었습니다.');
+                closeEditReportModal();
+                fetchResults();
+            } catch (e) {
+                alert('평가결과 수정 저장 실패: ' + e.message);
+            }
+        });
+
+        // 심사대상 데이터 로드 및 렌더링
+        async function fetchAuditTargets() {
+            try {
+                // 모든 농장 정보 가져오기
+                const { data: farms, error: farmsError } = await db.from('farms').select('*').order('name', { ascending: true });
+                if (farmsError) throw farmsError;
+
+                // 이미 완료된 평가 보고서 목록 가져오기 (실시간 상태 판별용)
+                const { data: reports, error: reportsError } = await db.from('evaluation_reports').select('farm_id');
+                if (reportsError) throw reportsError;
+
+                const completedFarmIds = new Set(reports.map(r => r.farm_id));
+
+                const tbody = document.getElementById('auditTargetList');
+                if (!tbody) return;
+
+                if (!farms || farms.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">등록된 심사대상이 없습니다.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = farms.map(farm => {
+                    // remarks 컬럼에 저장된 JSON 데이터 파싱
+                    let remarksData = { notes: '', audit_type: '', eval_date: '' };
+                    try {
+                        if (farm.remarks && farm.remarks.trim().startsWith('{')) {
+                            remarksData = JSON.parse(farm.remarks);
+                        } else {
+                            remarksData.notes = farm.remarks || '';
+                        }
+                    } catch (e) {
+                        remarksData.notes = farm.remarks || '';
+                    }
+
+                    const auditType = remarksData.audit_type || '-';
+                    let evalDateStr = '-';
+                    if (remarksData.eval_date) {
+                        const d = new Date(remarksData.eval_date);
+                        evalDateStr = isNaN(d.getTime()) ? remarksData.eval_date : d.toLocaleString();
+                    }
+
+                    // 평가 완료 여부에 따라 상태 표시
+                    const isCompleted = completedFarmIds.has(farm.id);
+                    const statusText = isCompleted ? '평가완료' : '미실시';
+                    const statusBadgeClass = isCompleted ? 'status-complete' : 'status-pending';
+
+                    // onclick 핸들러에 농장 객체를 안전하게 넘기기 위해 인코딩 처리
+                    const farmJson = JSON.stringify(farm).replace(/"/g, '&quot;');
+
+                    return `
+                        <tr>
+                            <td style="font-weight: 500;">${farm.name}</td>
+                            <td>${farm.representative}</td>
+                            <td><span class="status-badge status-process" style="font-size: 0.75rem; background: ${auditType === '-' ? '#e2e8f0' : ''}; color: ${auditType === '-' ? '#475569' : ''};">${auditType}</span></td>
+                            <td>${evalDateStr}</td>
+                            <td style="text-align: center;">
+                                <span class="status-badge ${statusBadgeClass}" style="font-size: 0.75rem;">${statusText}</span>
+                            </td>
+                            <td>
+                                <button class="logout-btn" style="padding: 4px 8px; color: var(--primary-color); border-color: var(--primary-color);" onclick="openAuditModal(${farmJson})">심사 설정</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error('Error fetching audit targets:', e);
+            }
+        }
+
+        // 심사 정보 설정 모달 열기
+        function openAuditModal(farm) {
+            document.getElementById('auditFarmId').value = farm.id;
+            document.getElementById('auditFarmName').value = farm.name;
+
+            let remarksData = { notes: '', audit_type: '', eval_date: '' };
+            try {
+                if (farm.remarks && farm.remarks.trim().startsWith('{')) {
+                    remarksData = JSON.parse(farm.remarks);
+                } else {
+                    remarksData.notes = farm.remarks || '';
+                }
+            } catch (e) {
+                remarksData.notes = farm.remarks || '';
+            }
+
+            document.getElementById('auditType').value = remarksData.audit_type || '신규';
+            
+            // datetime-local input 값 형식 포맷팅 (YYYY-MM-DDTHH:MM)
+            let formattedDate = '';
+            if (remarksData.eval_date) {
+                const date = new Date(remarksData.eval_date);
+                if (!isNaN(date.getTime())) {
+                    const pad = (num) => String(num).padStart(2, '0');
+                    const year = date.getFullYear();
+                    const month = pad(date.getMonth() + 1);
+                    const day = pad(date.getDate());
+                    const hours = pad(date.getHours());
+                    const minutes = pad(date.getMinutes());
+                    formattedDate = `${year}-${month}-${day}T${hours}:${minutes}`;
+                }
+            }
+            document.getElementById('auditEvalDate').value = formattedDate;
+
+            // 저장 시 비고 정보 보존을 위해 전역 객체에 기존 비고 기록
+            window.currentFarmNotes = remarksData.notes || '';
+
+            document.getElementById('auditModal').style.display = 'block';
+        }
+
+        // 심사 정보 설정 모달 닫기
+        function closeAuditModal() {
+            document.getElementById('auditModal').style.display = 'none';
+        }
+
+        // 심사 정보 설정 저장 핸들러
+        document.getElementById('auditForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const farmId = document.getElementById('auditFarmId').value;
+            const auditType = document.getElementById('auditType').value;
+            const evalDate = document.getElementById('auditEvalDate').value;
+
+            // 기존 비고 내용을 유지하며 심사 정보를 JSON 문자열로 직렬화
+            const remarksValue = JSON.stringify({
+                notes: window.currentFarmNotes || '',
+                audit_type: auditType,
+                eval_date: evalDate
+            });
+
+            const { error } = await db
+                .from('farms')
+                .update({ remarks: remarksValue })
+                .eq('id', farmId);
+
+            if (error) {
+                alert('심사 정보 저장에 실패했습니다: ' + error.message);
+                console.error(error);
+            } else {
+                closeAuditModal();
+                fetchAuditTargets();
+            }
+        });
+
         // 초기 데이터 로드
+        fetchAuditTargets();
         fetchFarms();
 
         // 현재 시간 표시
@@ -1044,6 +1658,95 @@
         }
         setInterval(updateTime, 1000);
         updateTime();
+
+        // 평가 결과 엑셀 다운로드 기능
+        async function exportToExcel(reportId) {
+            try {
+                // 1. 해당 보고서 데이터 로드
+                const { data: report, error } = await db
+                    .from('evaluation_reports')
+                    .select('*, farms (*)')
+                    .eq('id', reportId)
+                    .single();
+
+                if (error) throw error;
+
+                // 2. 전체 평가 항목 문장 매핑을 위한 항목 리스트 로드
+                const { data: evalItems, error: itemsError } = await db
+                    .from('evaluation_items')
+                    .select('*');
+                
+                if (itemsError) throw itemsError;
+
+                const itemMap = {};
+                evalItems.forEach(item => {
+                    itemMap[item.id] = item;
+                });
+
+                const details = report.details || {};
+
+                // 3. 엑셀에 내보낼 데이터 배열 가공
+                const excelData = [];
+
+                // 기본 정보 헤더 추가
+                excelData.push(["동물복지인증 평가 보고서", "", "", ""]);
+                excelData.push([]);
+                excelData.push(["평가 기본 정보", "", "", ""]);
+                excelData.push(["농장명", report.farms ? report.farms.name : '-', "평가자 ID", report.evaluator_id]);
+                excelData.push(["대표자", report.farms ? report.farms.representative : '-', "평가 점수", report.score + "점"]);
+                excelData.push(["소재지", report.farms ? report.farms.address : '-', "평가 일시", new Date(report.created_at).toLocaleString()]);
+                excelData.push(["종합 의견", report.summary || '의견 없음', "", ""]);
+                excelData.push([]);
+
+                // 평가 상세 내역 헤더 추가
+                excelData.push(["평가 상세 내역", "", "", ""]);
+                excelData.push(["번호", "평가 대항목 / 소항목", "평가 기준", "평가 결과(값)", "평가 의견"]);
+
+                let index = 1;
+                Object.keys(details).forEach(key => {
+                    const itemDetail = details[key];
+                    const evalItem = itemMap[key] || {};
+                    const standardText = evalItem.standard || '미확인 문항';
+                    const groupText = `[${evalItem.large_item || '-'}] ${evalItem.small_item || ''}`;
+                    
+                    // 적합기준 파싱하여 라벨 매핑
+                    const options = parseOptions(evalItem.compliance_criteria);
+                    const matchedOption = options.find(o => o.value === itemDetail.status);
+                    const statusText = matchedOption ? matchedOption.label : (itemDetail.status || '-');
+
+                    excelData.push([
+                        index++,
+                        groupText,
+                        standardText,
+                        statusText,
+                        itemDetail.comment || '-'
+                    ]);
+                });
+
+                // 4. 워크북 및 워크시트 생성
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet(excelData);
+
+                // 열 너비 조절 설정
+                ws['!cols'] = [
+                    { wch: 8 },  // 번호
+                    { wch: 30 }, // 대항목
+                    { wch: 60 }, // 평가 기준
+                    { wch: 25 }, // 평가 결과
+                    { wch: 35 }  // 평가 의견
+                ];
+
+                XLSX.utils.book_append_sheet(wb, ws, "평가결과");
+
+                // 5. 엑셀 파일 다운로드 실행
+                const fileName = `${report.farms ? report.farms.name : '농장'}_평가결과_${new Date().toISOString().substring(0, 10)}.xlsx`;
+                XLSX.writeFile(wb, fileName);
+
+            } catch (e) {
+                console.error('Error exporting to Excel:', e);
+                alert('엑셀 내보내기 중 오류가 발생했습니다: ' + e.message);
+            }
+        }
     </script>
 </body>
 </html>
