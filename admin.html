@@ -1307,7 +1307,28 @@
 
             const content = document.getElementById('reportDetailContent');
             const details = report.details || {};
-            const sortedDetailKeys = Object.keys(details).map(k => parseInt(k)).sort((a, b) => a - b);
+            
+            // details가 배열인지 객체인지 판별하여 정규화된 배열 구조 생성
+            let normalizedDetails = [];
+            if (Array.isArray(details)) {
+                normalizedDetails = details;
+            } else {
+                const sortedDetailKeys = Object.keys(details).map(k => parseInt(k)).sort((a, b) => a - b);
+                normalizedDetails = Object.keys(details).map(key => {
+                    const itemDetail = details[key];
+                    return {
+                        orig_id: parseInt(key),
+                        status: itemDetail.status,
+                        comment: itemDetail.comment || '',
+                        measurements: itemDetail.measurements || [],
+                        cow_conditions: itemDetail.cow_conditions || null,
+                        large_item: itemDetail.large_item || '',
+                        small_item: itemDetail.small_item || '',
+                        standard: itemDetail.standard || '',
+                        compliance_criteria: itemDetail.compliance_criteria || ''
+                    };
+                });
+            }
             
             let detailsHtml = `
                 <div class="card" style="background: #f8fafc; margin-bottom: 20px;">
