@@ -204,16 +204,17 @@
                 const sortedDetailKeys = Object.keys(details).map(k => parseInt(k)).sort((a, b) => a - b);
                 normalizedDetails = sortedDetailKeys.map(key => {
                     const itemDetail = details[key];
+                    const isObj = (itemDetail !== null && typeof itemDetail === 'object');
                     return {
                         orig_id: parseInt(key),
-                        status: itemDetail.status,
-                        comment: itemDetail.comment || '',
-                        measurements: itemDetail.measurements || [],
-                        cow_conditions: itemDetail.cow_conditions || null,
-                        large_item: itemDetail.large_item || '',
-                        small_item: itemDetail.small_item || '',
-                        standard: itemDetail.standard || '',
-                        compliance_criteria: itemDetail.compliance_criteria || ''
+                        status: isObj ? itemDetail.status : itemDetail,
+                        comment: isObj ? (itemDetail.comment || '') : '',
+                        measurements: isObj ? (itemDetail.measurements || []) : [],
+                        cow_conditions: isObj ? (itemDetail.cow_conditions || null) : null,
+                        large_item: isObj ? (itemDetail.large_item || '') : '',
+                        small_item: isObj ? (itemDetail.small_item || '') : '',
+                        standard: isObj ? (itemDetail.standard || '') : '',
+                        compliance_criteria: isObj ? (itemDetail.compliance_criteria || '') : ''
                     };
                 });
             }
@@ -273,7 +274,7 @@
                         };
                     }
                 } else {
-                    status = itemDetail || 'N';
+                    status = itemDetail ? itemDetail.status : 'N';
                 }
 
                 if (status === 'NA' || status === 'N/A') return ''; // 공식 평가에서 NA는 제외
@@ -299,10 +300,17 @@
                 const matchedOption = options.find(o => o.value === status);
                 const statusText = matchedOption ? matchedOption.label : status;
                 
-                let statusClass = 'status-n';
-                if (status === 'Y' || (status !== 'N' && !isNaN(parseFloat(status)) && parseFloat(status) > 0)) {
-                    statusClass = 'status-y';
+                const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+                const maxVal = numericValues.length > 0 ? Math.max(...numericValues) : 1;
+
+                let isCompliant = false;
+                if (numericValues.length > 0) {
+                    isCompliant = parseFloat(status) === maxVal;
+                } else {
+                    isCompliant = status === 'Y';
                 }
+
+                let statusClass = isCompliant ? 'status-y' : 'status-n';
 
                 return `
                     <div class="detail-item" style="flex-direction: column; align-items: flex-start;">

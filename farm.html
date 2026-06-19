@@ -308,7 +308,8 @@
 
                 evalItems.forEach(item => {
                     const status = details[item.id];
-                    if (!status) return; // 자가진단 시 평가 안 한 항목은 배제
+                    // 자가진단 시 평가 안 한 항목 및 N/A는 연산에서 배제
+                    if (!status || status === 'N/A') return; 
 
                     if (!sectionStats[item.section]) {
                         sectionStats[item.section] = { compliant: 0, total: 0 };
@@ -332,7 +333,10 @@
 
                     if (numericValues.length > 0) {
                         maxVal = Math.max(...numericValues);
-                        earnedVal = (status === 'Y') ? maxVal : 0;
+                        earnedVal = parseFloat(status);
+                        if (isNaN(earnedVal)) {
+                            earnedVal = 0;
+                        }
 
                         if (isGroupA) {
                             groupA_earned += earnedVal;
@@ -340,6 +344,17 @@
                         } else if (isGroupB) {
                             groupB_earned += earnedVal;
                             groupB_max += maxVal;
+                        }
+
+                        if (earnedVal === maxVal) {
+                            sectionStats[item.section].compliant++;
+                        } else {
+                            weaknessItems.push({
+                                section: item.section,
+                                large_item: item.large_item,
+                                small_item: item.small_item,
+                                standard: item.standard
+                            });
                         }
                     } else {
                         maxVal = 1;
@@ -353,20 +368,17 @@
                             groupB_max += maxVal;
                         }
 
-                        if (status === 'N') {
+                        if (status === 'Y') {
+                            sectionStats[item.section].compliant++;
+                        } else {
                             nonCompliantYNCount++;
+                            weaknessItems.push({
+                                section: item.section,
+                                large_item: item.large_item,
+                                small_item: item.small_item,
+                                standard: item.standard
+                            });
                         }
-                    }
-
-                    if (status === 'Y') {
-                        sectionStats[item.section].compliant++;
-                    } else if (status === 'N') {
-                        weaknessItems.push({
-                            section: item.section,
-                            large_item: item.large_item,
-                            small_item: item.small_item,
-                            standard: item.standard
-                        });
                     }
                 });
 
@@ -515,25 +527,34 @@
             container.innerHTML = Object.keys(grouped).map(section => `
                 <div class="section-group" style="margin-bottom: 30px;">
                     <h4 style="background: #f8fafc; padding: 12px 20px; border-left: 5px solid var(--primary-color); margin-bottom: 15px; font-size: 1.1rem;">${section}</h4>
-                    ${grouped[section].map(item => `
+                    ${grouped[section].map(item => {
+                        const options = parseOptions(item.compliance_criteria);
+                        const hasParentheses = item.section && item.section.includes('(') && item.section.includes(')');
+                        return `
                         <div class="card" style="margin-bottom: 15px; padding: 20px; border: 1px solid #edf2f7;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
-                                <div style="flex: 1;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 250px;">
                                     <div style="font-weight: 700; color: #2d3748; margin-bottom: 5px;">${item.large_item} ${item.small_item ? '- ' + item.small_item : ''}</div>
                                     <div style="font-size: 0.9rem; color: #4a5568; margin-bottom: 10px;">${item.standard}</div>
-                                    <div style="font-size: 0.85rem; color: #718096; font-style: italic;">적합 기준: ${item.compliance_criteria}</div>
                                 </div>
-                                <div style="display: flex; gap: 10px; align-items: center;">
-                                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
-                                        <input type="radio" name="item_${item.id}" value="Y" required> 적합
-                                    </label>
-                                    <label style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
-                                        <input type="radio" name="item_${item.id}" value="N"> 부적합
-                                    </label>
+                                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 400px; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7;">
+                                    ${options.map(opt => `
+                                        <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #4a5568;">
+                                            <input type="radio" name="item_${item.id}" value="${opt.value}" required style="margin-top: 4px;"> 
+                                            <span>${opt.label}</span>
+                                        </label>
+                                    `).join('')}
+                                    ${hasParentheses ? `
+                                        <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #718096; font-weight: 500; border-top: 1px dashed #cbd5e0; padding-top: 8px; margin-top: 4px;">
+                                            <input type="radio" name="item_${item.id}" value="N/A" style="margin-top: 4px;"> 
+                                            <span>해당사항없음 (평가 생략)</span>
+                                        </label>
+                                    ` : ''}
                                 </div>
                             </div>
                         </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             `).join('');
         }
@@ -561,7 +582,14 @@
 
             diagnosisItems.forEach(item => {
                 const radio = container.querySelector(`input[name="item_${item.id}"]:checked`);
-                const val = radio ? radio.value : 'N';
+                const val = radio ? radio.value : null;
+
+                // N/A 항목은 채점에서 제외
+                if (val === null || val === 'N/A') {
+                    details[item.id] = 'N/A';
+                    return;
+                }
+                
                 details[item.id] = val;
 
                 const options = parseOptions(item.compliance_criteria);
@@ -582,7 +610,10 @@
                 if (numericValues.length > 0) {
                     // 점수형 문항
                     maxVal = Math.max(...numericValues);
-                    earnedVal = (val === 'Y') ? maxVal : 0;
+                    earnedVal = parseFloat(val);
+                    if (isNaN(earnedVal)) {
+                        earnedVal = 0;
+                    }
                     
                     earnedPoints += earnedVal;
                     maxPoints += maxVal;
