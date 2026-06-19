@@ -82,12 +82,12 @@
                 </div>
                 
                 <div id="hasResultContent" style="display: none;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 25px;">
                         <!-- 최근 진단 요약 카드 -->
                         <div class="card" style="padding: 25px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                             <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--primary-color);">최근 자가진단 종합 점수</h3>
-                            <div style="display: inline-flex; align-items: center; justify-content: center; width: 140px; height: 140px; border-radius: 50%; background: #e6fffa; border: 8px solid var(--primary-color); margin-bottom: 15px;">
-                                <span style="font-size: 2.2rem; font-weight: 800; color: var(--primary-color);" id="latestResultScore">0%</span>
+                            <div style="display: inline-flex; align-items: center; justify-content: center; width: 130px; height: 130px; border-radius: 50%; background: #e6fffa; border: 8px solid var(--primary-color); margin-bottom: 15px;">
+                                <span style="font-size: 2rem; font-weight: 800; color: var(--primary-color);" id="latestResultScore">0%</span>
                             </div>
                             <p id="latestResultDate" style="font-size: 0.85rem; color: #718096; margin-bottom: 10px;"></p>
                             <div style="display: flex; justify-content: space-around; width: 100%; margin-top: 15px; border-top: 1px solid #edf2f7; padding-top: 15px;">
@@ -101,11 +101,35 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- 인증 판정 결과 카드 -->
+                        <div class="card" id="suitabilityCard" style="padding: 25px; display: flex; flex-direction: column; justify-content: space-between; border: 2px solid #edf2f7;">
+                            <h3 style="margin-bottom: 12px; font-size: 1.1rem; color: var(--primary-color); text-align: center;">인증 심사 통과 예측</h3>
+                            <div style="text-align: center; margin-bottom: 15px;">
+                                <span id="latestSuitabilityBadge" style="font-size: 1.05rem; padding: 6px 16px; font-weight: 700; border-radius: 4px; display: inline-block;">
+                                    -
+                                </span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem; color: #4a5568;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 6px;">
+                                    <span>일반 환경 (A그룹)</span>
+                                    <span id="latestGroupAScore" style="font-weight: 700;">0점 / 기준 85점</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 6px;">
+                                    <span>소의 상태 (B그룹)</span>
+                                    <span id="latestGroupBScore" style="font-weight: 700;">0점 / 기준 25점</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px;">
+                                    <span>필수 적부 부적합</span>
+                                    <span id="latestYNCount" style="font-weight: 700;">0개 / 기준 0개</span>
+                                </div>
+                            </div>
+                        </div>
                         
                         <!-- 섹션별 적합 현황 그래프 카드 (Chart.js 연동) -->
                         <div class="card" style="padding: 25px; display: flex; flex-direction: column; justify-content: space-between;">
                             <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--primary-color);">영역별 적합률 (%)</h3>
-                            <div style="width: 100%; height: 220px; position: relative;">
+                            <div style="width: 100%; height: 200px; position: relative;">
                                 <canvas id="sectionChart"></canvas>
                             </div>
                         </div>
@@ -162,6 +186,33 @@
         // 전역 _supabase와 충돌을 피하기 위해 db로 명칭 변경
         const db = window.auth.supabase;
         let sectionChartInstance = null; // Chart.js 차트 인스턴스 전역 보관용
+        let diagnosisItems = []; // 자가진단 평가 항목 보관용 전역 변수
+
+        // 적합 기준 텍스트를 파싱하여 라디오 버튼 옵션 배열로 반환하는 함수
+        function parseOptions(criteriaText) {
+            if (!criteriaText || criteriaText.trim() === "") {
+                return [
+                    { value: "Y", label: "Y: 적합" },
+                    { value: "N", label: "N: 부적합" }
+                ];
+            }
+            const lines = criteriaText.split('\n');
+            const options = [];
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed) return;
+                
+                const colonIndex = trimmed.indexOf(':');
+                if (colonIndex > 0) {
+                    const val = trimmed.substring(0, colonIndex).trim();
+                    const desc = trimmed.substring(colonIndex + 1).trim();
+                    options.push({ value: val, label: `${val}: ${desc}` });
+                } else {
+                    options.push({ value: trimmed, label: trimmed });
+                }
+            });
+            return options;
+        }
 
         // 사이드바 토글
         function toggleSidebar() {
@@ -249,6 +300,12 @@
                 const sectionStats = {};
                 const weaknessItems = [];
 
+                let groupA_earned = 0;
+                let groupA_max = 0;
+                let groupB_earned = 0;
+                let groupB_max = 0;
+                let nonCompliantYNCount = 0;
+
                 evalItems.forEach(item => {
                     const status = details[item.id];
                     if (!status) return; // 자가진단 시 평가 안 한 항목은 배제
@@ -257,6 +314,49 @@
                         sectionStats[item.section] = { compliant: 0, total: 0 };
                     }
                     sectionStats[item.section].total++;
+
+                    const options = parseOptions(item.compliance_criteria);
+                    const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+
+                    const isGroupA = [
+                        '□ 일반기준',
+                        '□ 사양관리 방법',
+                        '□ 사육시설 및 환경',
+                        '□ 동물복지형 자유방목(추가 사항)'
+                    ].includes(item.section);
+
+                    const isGroupB = (item.section === '□ 소의 상태 평가');
+
+                    let earnedVal = 0;
+                    let maxVal = 0;
+
+                    if (numericValues.length > 0) {
+                        maxVal = Math.max(...numericValues);
+                        earnedVal = (status === 'Y') ? maxVal : 0;
+
+                        if (isGroupA) {
+                            groupA_earned += earnedVal;
+                            groupA_max += maxVal;
+                        } else if (isGroupB) {
+                            groupB_earned += earnedVal;
+                            groupB_max += maxVal;
+                        }
+                    } else {
+                        maxVal = 1;
+                        earnedVal = (status === 'Y') ? 1 : 0;
+
+                        if (isGroupA) {
+                            groupA_earned += earnedVal;
+                            groupA_max += maxVal;
+                        } else if (isGroupB) {
+                            groupB_earned += earnedVal;
+                            groupB_max += maxVal;
+                        }
+
+                        if (status === 'N') {
+                            nonCompliantYNCount++;
+                        }
+                    }
 
                     if (status === 'Y') {
                         sectionStats[item.section].compliant++;
@@ -270,11 +370,40 @@
                     }
                 });
 
+                const scoreA = groupA_max > 0 ? Math.round((groupA_earned / groupA_max) * 100) : 0;
+                const scoreB = groupB_max > 0 ? Math.round((groupB_earned / groupB_max) * 100) : 0;
+
+                const isGroupAPass = scoreA >= 85;
+                const isGroupBPass = scoreB >= 25;
+                const isYNPass = nonCompliantYNCount === 0;
+                const finalPassed = isGroupAPass && isGroupBPass && isYNPass;
+
                 // UI에 요약 정보 바인딩
                 document.getElementById('latestResultScore').innerText = latestReport.score + '%';
                 document.getElementById('latestResultDate').innerText = '진단 일시: ' + new Date(latestReport.created_at).toLocaleString();
                 document.getElementById('latestCompliantCount').innerText = latestReport.compliant_count;
                 document.getElementById('latestNonCompliantCount').innerText = latestReport.non_compliant_count;
+
+                // 인증 기준 심사 예측 정보 바인딩
+                const badge = document.getElementById('latestSuitabilityBadge');
+                const card = document.getElementById('suitabilityCard');
+                if (finalPassed) {
+                    badge.innerText = '인증 적합 (통과)';
+                    badge.style.background = '#2c7a7b';
+                    badge.style.color = '#ffffff';
+                    card.style.borderColor = '#2c7a7b';
+                    card.style.background = '#e6fffa';
+                } else {
+                    badge.innerText = '인증 부적합 (미달)';
+                    badge.style.background = '#e53e3e';
+                    badge.style.color = '#ffffff';
+                    card.style.borderColor = '#e53e3e';
+                    card.style.background = '#fff5f5';
+                }
+
+                document.getElementById('latestGroupAScore').innerHTML = `${scoreA}점 <span style="font-weight: 600; font-size: 0.75rem; color: ${isGroupAPass ? '#2c7a7b' : '#c53030'};">${isGroupAPass ? '● 통과' : '● 미달'}</span>`;
+                document.getElementById('latestGroupBScore').innerHTML = `${scoreB}점 <span style="font-weight: 600; font-size: 0.75rem; color: ${isGroupBPass ? '#2c7a7b' : '#c53030'};">${isGroupBPass ? '● 통과' : '● 미달'}</span>`;
+                document.getElementById('latestYNCount').innerHTML = `${nonCompliantYNCount}개 <span style="font-weight: 600; font-size: 0.75rem; color: ${isYNPass ? '#2c7a7b' : '#c53030'};">${isYNPass ? '● 통과' : '● 미달'}</span>`;
 
                 // 취약점 목록 렌더링
                 const weaknessList = document.getElementById('latestWeaknessList');
@@ -374,6 +503,7 @@
             
             const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
             if (error) return alert('평가항목을 불러오는 데 실패했습니다.');
+            diagnosisItems = data;
 
             const container = document.getElementById('evalItemsContainer');
             const grouped = data.reduce((acc, item) => {
@@ -418,26 +548,91 @@
                 return;
             }
 
-            let compliant = 0;
-            let nonCompliant = 0;
+            let groupA_earned = 0;
+            let groupA_max = 0;
+            let groupB_earned = 0;
+            let groupB_max = 0;
+
+            let earnedPoints = 0;
+            let maxPoints = 0;
+            let compliantCount = 0;
+            let nonCompliantCount = 0;
             let details = {};
 
-            radios.forEach(radio => {
-                const itemId = radio.name.replace('item_', '');
-                details[itemId] = radio.value;
-                if (radio.value === 'Y') compliant++;
-                else nonCompliant++;
+            diagnosisItems.forEach(item => {
+                const radio = container.querySelector(`input[name="item_${item.id}"]:checked`);
+                const val = radio ? radio.value : 'N';
+                details[item.id] = val;
+
+                const options = parseOptions(item.compliance_criteria);
+                const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+
+                const isGroupA = [
+                    '□ 일반기준',
+                    '□ 사양관리 방법',
+                    '□ 사육시설 및 환경',
+                    '□ 동물복지형 자유방목(추가 사항)'
+                ].includes(item.section);
+
+                const isGroupB = (item.section === '□ 소의 상태 평가');
+
+                let earnedVal = 0;
+                let maxVal = 0;
+
+                if (numericValues.length > 0) {
+                    // 점수형 문항
+                    maxVal = Math.max(...numericValues);
+                    earnedVal = (val === 'Y') ? maxVal : 0;
+                    
+                    earnedPoints += earnedVal;
+                    maxPoints += maxVal;
+
+                    if (isGroupA) {
+                        groupA_earned += earnedVal;
+                        groupA_max += maxVal;
+                    } else if (isGroupB) {
+                        groupB_earned += earnedVal;
+                        groupB_max += maxVal;
+                    }
+
+                    if (earnedVal === maxVal) {
+                        compliantCount++;
+                    } else {
+                        nonCompliantCount++;
+                    }
+                } else {
+                    // 적부(Y/N)형 문항
+                    maxVal = 1;
+                    earnedVal = (val === 'Y') ? 1 : 0;
+
+                    earnedPoints += earnedVal;
+                    maxPoints += maxVal;
+
+                    if (isGroupA) {
+                        groupA_earned += earnedVal;
+                        groupA_max += maxVal;
+                    } else if (isGroupB) {
+                        groupB_earned += earnedVal;
+                        groupB_max += maxVal;
+                    }
+
+                    if (val === 'Y') {
+                        compliantCount++;
+                    } else {
+                        nonCompliantCount++;
+                    }
+                }
             });
 
-            const score = Math.round((compliant / allItems.length) * 100);
+            const score = maxPoints > 0 ? Math.round((earnedPoints / maxPoints) * 100) : 0;
             const userId = localStorage.getItem('user_id');
 
             // Supabase에 결과 저장
             const { error } = await db.from('diagnosis_results').insert({
                 user_id: userId,
                 score: score,
-                compliant_count: compliant,
-                non_compliant_count: nonCompliant,
+                compliant_count: compliantCount,
+                non_compliant_count: nonCompliantCount,
                 details: details
             });
 
