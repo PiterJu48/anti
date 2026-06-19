@@ -1340,8 +1340,8 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${Object.keys(details).map(key => {
-                                const itemDetail = details[key];
+                            ${normalizedDetails.map((itemDetail, index) => {
+                                const key = itemDetail.orig_id || index;
                                 
                                 // 다단계 복원 기법 (1: 스냅샷 우선 적용, 2: ID 매치, 3: 순서 매치)
                                 let evalItem = null;
@@ -1355,10 +1355,8 @@
                                 } else if (itemMap[key]) {
                                     evalItem = itemMap[key];
                                 } else {
-                                    const keyInt = parseInt(key);
-                                    const idx = sortedDetailKeys.indexOf(keyInt);
-                                    if (idx !== -1 && evalItems && evalItems[idx]) {
-                                        evalItem = evalItems[idx];
+                                    if (evalItems && evalItems[index]) {
+                                        evalItem = evalItems[index];
                                     } else {
                                         evalItem = {
                                             large_item: '미확인 대항목',
