@@ -350,6 +350,7 @@
                     eval_value: item.eval_value,
                     eval_comment: item.eval_comment,
                     eval_measurements: item.eval_measurements || [],
+                    eval_space_type: item.eval_space_type || null,
                     eval_cow_conditions: item.eval_cow_conditions || null
                 }))
             };
@@ -389,6 +390,7 @@
                     eval_value: null,
                     eval_comment: "",
                     eval_measurements: ['', '', '', '', ''],
+                    eval_space_type: item.small_item === '조명' ? 'general' : null,
                     eval_cow_conditions: item.section === '□ 소의 상태 평가' ? [
                         { id: 1, values: {} },
                         { id: 2, values: {} }
@@ -415,6 +417,9 @@
                                 match.eval_comment = dItem.eval_comment;
                                 if (dItem.eval_measurements) {
                                     match.eval_measurements = dItem.eval_measurements;
+                                }
+                                if (dItem.eval_space_type) {
+                                    match.eval_space_type = dItem.eval_space_type;
                                 }
                                 if (dItem.eval_cow_conditions) {
                                     match.eval_cow_conditions = dItem.eval_cow_conditions;
@@ -680,6 +685,15 @@
                                     <div class="eval-item-right" style="flex: 1; max-width: 450px;">
                                         ${isSpecialItem ? `
                                             <div style="margin-bottom: 15px; background: #f7fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                                                ${item.small_item === '조명' ? `
+                                                    <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                                                        <span style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">공간 유형:</span>
+                                                        <select onchange="updateLightingSpaceType(${item.id}, this.value)" style="padding: 4px 8px; font-size: 0.85rem; border: 1px solid #cbd5e0; border-radius: 4px; background: #fff; color: #2d3748;">
+                                                            <option value="general" ${(item.eval_space_type || 'general') === 'general' ? 'selected' : ''}>일반공간 (100 lux 이상)</option>
+                                                            <option value="rest" ${(item.eval_space_type || 'general') === 'rest' ? 'selected' : ''}>휴식공간 (50 lux 이하)</option>
+                                                        </select>
+                                                    </div>
+                                                ` : ''}
                                                 <div style="font-weight: 600; font-size: 0.85rem; color: #4a5568; margin-bottom: 8px;">
                                                     실측치 기록 (5개 중 최소 2개 입력 필수)
                                                 </div>
@@ -792,6 +806,39 @@
             }
         }
 
+        // 공간 유형 선택 변경 시 호출되는 함수
+        function updateLightingSpaceType(id, type) {
+            const item = evaluationItems.find(i => i.id === id);
+            if (!item) return;
+
+            item.eval_space_type = type;
+            
+            // 실시간 연산 및 자동 적부 판정 재적용
+            calculateSpecialItem(item);
+
+            // 결과 텍스트 업데이트
+            const resultEl = document.getElementById(`calc_result_${id}`);
+            if (resultEl) {
+                resultEl.innerHTML = calculateSpecialResultText(item);
+            }
+
+            // UI의 라디오 버튼 동적 체크 업데이트
+            const radios = document.getElementsByName(`off_item_${id}`);
+            radios.forEach(radio => {
+                if (radio.value === item.eval_value) {
+                    radio.checked = true;
+                } else {
+                    radio.checked = false;
+                }
+            });
+
+            // UI의 의견란 자동 입력 업데이트
+            const commEl = document.getElementById(`off_comm_${id}`);
+            if (commEl) {
+                commEl.value = item.eval_comment;
+            }
+        }
+
         // 측정결과 계산 텍스트 생성
         function calculateSpecialResultText(item) {
             const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
@@ -803,7 +850,13 @@
             const avgVal = parseFloat((sum / list.length).toFixed(2));
             const status = item.eval_value;
             const statusText = status === 'Y' ? '<strong style="color: #2c7a7b;">적합(Y)</strong>' : '<strong style="color: #e53e3e;">부적합(N)</strong>';
-            return `평균값: <strong>${avgVal}</strong>, 최소값: <strong>${minVal}</strong> &rarr; 판정: ${statusText}`;
+            
+            let condText = '';
+            if (item.small_item === '조명') {
+                condText = (item.eval_space_type || 'general') === 'general' ? ' (일반공간 기준)' : ' (휴식공간 기준)';
+            }
+            
+            return `평균값: <strong>${avgVal}</strong>, 최소값: <strong>${minVal}</strong> &rarr; 판정: ${statusText}${condText}`;
         }
 
         // 조명/공기오염도 자동 적부 연산 로직
@@ -821,13 +874,24 @@
 
             let judgment = 'N';
             if (item.small_item === '조명') {
-                if (avgVal >= 100) {
-                    judgment = 'Y';
+                const spaceType = item.eval_space_type || 'general';
+                if (spaceType === 'general') {
+                    if (avgVal >= 100) {
+                        judgment = 'Y';
+                    } else {
+                        judgment = 'N';
+                    }
+                    item.eval_value = judgment;
+                    item.eval_comment = `[자동 판정 - 일반공간] 측정값: [${list.join(', ')}], 평균: ${avgVal} lux, 최소: ${minVal} lux (기준: 평균 100 lux 이상 시 적합)`;
                 } else {
-                    judgment = 'N';
+                    if (avgVal <= 50) {
+                        judgment = 'Y';
+                    } else {
+                        judgment = 'N';
+                    }
+                    item.eval_value = judgment;
+                    item.eval_comment = `[자동 판정 - 휴식공간] 측정값: [${list.join(', ')}], 평균: ${avgVal} lux, 최소: ${minVal} lux (기준: 평균 50 lux 이하 시 적합)`;
                 }
-                item.eval_value = judgment;
-                item.eval_comment = `[자동 판정] 측정값: [${list.join(', ')}], 평균: ${avgVal} lux, 최소: ${minVal} lux (기준: 평균 100 lux 이상 시 적합)`;
             } else if (item.small_item === '공기 오염도') {
                 if (avgVal <= 25) {
                     judgment = 'Y';
@@ -1063,6 +1127,7 @@
                     status: item.eval_value,
                     comment: item.eval_comment || '',
                     measurements: item.eval_measurements || [],
+                    space_type: item.eval_space_type || null,
                     cow_conditions: item.section === '□ 소의 상태 평가' ? (evaluationItems.find(i => i.section === '□ 소의 상태 평가').eval_cow_conditions || null) : null
                 });
                 
