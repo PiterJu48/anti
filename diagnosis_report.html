@@ -185,13 +185,24 @@
                 return acc;
             }, {});
 
+            // details가 JSON 문자열일 경우 안전하게 객체/배열로 파싱
+            let details = data.details || {};
+            if (typeof details === 'string') {
+                try {
+                    details = JSON.parse(details);
+                } catch (e) {
+                    console.error('details JSON 파싱 실패:', e);
+                    details = {};
+                }
+            }
+
             // details가 배열인지 객체인지 판별하여 정규화된 배열 구조 생성
-            const details = data.details || {};
             let normalizedDetails = [];
             if (Array.isArray(details)) {
                 normalizedDetails = details;
             } else {
-                normalizedDetails = Object.keys(details).map(key => {
+                const sortedDetailKeys = Object.keys(details).map(k => parseInt(k)).sort((a, b) => a - b);
+                normalizedDetails = sortedDetailKeys.map(key => {
                     const itemDetail = details[key];
                     return {
                         orig_id: parseInt(key),
@@ -247,7 +258,7 @@
                 let comment = '';
                 
                 let evalItem = null;
-                const key = itemDetail.orig_id || index;
+                const key = (itemDetail && itemDetail.orig_id !== undefined && itemDetail.orig_id !== null) ? itemDetail.orig_id : index;
                 
                 if (type === 'official') {
                     status = itemDetail ? itemDetail.status : 'NA';

@@ -877,13 +877,17 @@
                         }
                     }
 
-                    // 3. 업데이트 수행 (Upsert 기능 활용)
+                    // 3. 업데이트 수행 (개별 UPDATE 쿼리 실행)
                     if (toUpdate.length > 0) {
-                        const { error: updateError } = await db
-                            .from('evaluation_items')
-                            .upsert(toUpdate);
-                        if (updateError) {
-                            throw new Error("기존 항목 업데이트 실패: " + updateError.message);
+                        for (const item of toUpdate) {
+                            const { id, ...updateData } = item;
+                            const { error: updateError } = await db
+                                .from('evaluation_items')
+                                .update(updateData)
+                                .eq('id', id);
+                            if (updateError) {
+                                throw new Error(`기존 항목(ID: ${id}) 업데이트 실패: ` + updateError.message);
+                            }
                         }
                     }
 
@@ -1306,7 +1310,17 @@
             }
 
             const content = document.getElementById('reportDetailContent');
-            const details = report.details || {};
+            
+            // details가 JSON 문자열일 경우 안전하게 객체/배열로 파싱
+            let details = report.details || {};
+            if (typeof details === 'string') {
+                try {
+                    details = JSON.parse(details);
+                } catch (e) {
+                    console.error('details JSON 파싱 실패:', e);
+                    details = {};
+                }
+            }
             
             // details가 배열인지 객체인지 판별하여 정규화된 배열 구조 생성
             let normalizedDetails = [];
@@ -1314,7 +1328,7 @@
                 normalizedDetails = details;
             } else {
                 const sortedDetailKeys = Object.keys(details).map(k => parseInt(k)).sort((a, b) => a - b);
-                normalizedDetails = Object.keys(details).map(key => {
+                normalizedDetails = sortedDetailKeys.map(key => {
                     const itemDetail = details[key];
                     return {
                         orig_id: parseInt(key),
@@ -1362,7 +1376,7 @@
                         </thead>
                         <tbody>
                             ${normalizedDetails.map((itemDetail, index) => {
-                                const key = itemDetail.orig_id || index;
+                                const key = (itemDetail && itemDetail.orig_id !== undefined && itemDetail.orig_id !== null) ? itemDetail.orig_id : index;
                                 
                                 // 다단계 복원 기법 (1: 스냅샷 우선 적용, 2: ID 매치, 3: 순서 매치)
                                 let evalItem = null;
