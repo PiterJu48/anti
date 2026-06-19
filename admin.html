@@ -64,18 +64,18 @@
                 <section class="card-grid">
                     <div class="card">
                         <h3><i class="fas fa-user-plus"></i> 신규 인증 신청</h3>
-                        <div style="font-size: 2rem; font-weight: 700; color: var(--primary-color);">12 건</div>
-                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">이번 주 접수된 신청 내역</p>
+                        <div id="newAuditCount" style="font-size: 2rem; font-weight: 700; color: var(--primary-color);">0 건</div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">심사대상 중 신규 신청 건수</p>
                     </div>
                     <div class="card">
                         <h3><i class="fas fa-search"></i> 진행 중인 평가</h3>
-                        <div style="font-size: 2rem; font-weight: 700; color: var(--accent-color);">8 건</div>
-                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">평가원 현장 방문 중</p>
+                        <div id="renewAuditCount" style="font-size: 2rem; font-weight: 700; color: var(--accent-color);">0 건</div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">심사대상 중 갱신 신청 건수</p>
                     </div>
                     <div class="card">
-                        <h3><i class="fas fa-check-circle"></i> 인증 완료 (누적)</h3>
-                        <div style="font-size: 2rem; font-weight: 700; color: #2c7a7b;">145 건</div>
-                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">2024년 전체 실적</p>
+                        <h3><i class="fas fa-redo"></i> 사후관리</h3>
+                        <div id="postAuditCount" style="font-size: 2rem; font-weight: 700; color: #2c7a7b;">0 건</div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">심사대상 중 사후관리 건수</p>
                     </div>
                 </section>
 
@@ -1835,8 +1835,18 @@
 
                 if (!farms || farms.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">등록된 심사대상이 없습니다.</td></tr>';
+                    
+                    // 빈 목록일 때 카드 숫자 0으로 업데이트
+                    document.getElementById('newAuditCount').innerText = '0 건';
+                    document.getElementById('renewAuditCount').innerText = '0 건';
+                    document.getElementById('postAuditCount').innerText = '0 건';
                     return;
                 }
+
+                // 심사유형별 미실시 건수 집계용 카운터
+                let newCount = 0;
+                let renewCount = 0;
+                let postCount = 0;
 
                 tbody.innerHTML = farms.map(farm => {
                     // remarks 컬럼에 저장된 JSON 데이터 파싱
@@ -1863,6 +1873,17 @@
                     const statusText = isCompleted ? '평가완료' : '미실시';
                     const statusBadgeClass = isCompleted ? 'status-complete' : 'status-pending';
 
+                    // 미실시(심사대상) 상태일 때 유형별 카운트 증가
+                    if (!isCompleted) {
+                        if (auditType === '신규') {
+                            newCount++;
+                        } else if (auditType === '갱신') {
+                            renewCount++;
+                        } else if (auditType === '사후관리') {
+                            postCount++;
+                        }
+                    }
+
                     // onclick 핸들러에 농장 객체를 안전하게 넘기기 위해 인코딩 처리
                     const farmJson = JSON.stringify(farm).replace(/"/g, '&quot;');
 
@@ -1881,6 +1902,11 @@
                         </tr>
                     `;
                 }).join('');
+
+                // 대시보드 상단 카드의 숫자 엘리먼트 업데이트
+                document.getElementById('newAuditCount').innerText = newCount + ' 건';
+                document.getElementById('renewAuditCount').innerText = renewCount + ' 건';
+                document.getElementById('postAuditCount').innerText = postCount + ' 건';
             } catch (e) {
                 console.error('Error fetching audit targets:', e);
             }
