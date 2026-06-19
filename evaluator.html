@@ -688,7 +688,7 @@
                                                     <!-- 조명 전용 10개 입력 UI (일반공간 5개 + 휴식공간 5개) -->
                                                     <div style="margin-bottom: 15px;">
                                                         <div style="font-weight: 600; font-size: 0.85rem; color: #2c7a7b; margin-bottom: 6px;">
-                                                            일반공간 실측치 (100 초과 적합 / 100 이하 1개라도 있으면 부적합)
+                                                            일반공간 실측치 (100 이상 적합 / 100 미만 1개라도 있으면 부적합)
                                                         </div>
                                                         <div style="display: flex; gap: 6px; margin-bottom: 10px;">
                                                             ${[0, 1, 2, 3, 4].map(idx => {
@@ -704,7 +704,7 @@
                                                     </div>
                                                     <div style="margin-bottom: 15px;">
                                                         <div style="font-weight: 600; font-size: 0.85rem; color: #dd6b20; margin-bottom: 6px;">
-                                                            휴식공간 실측치 (50 미만 적합 / 50 이상 1개라도 있으면 부적합)
+                                                            휴식공간 실측치 (50 이하 적합 / 50 초과 1개라도 있으면 부적합)
                                                         </div>
                                                         <div style="display: flex; gap: 6px; margin-bottom: 10px;">
                                                             ${[5, 6, 7, 8, 9].map(idx => {
@@ -879,18 +879,18 @@
                 let judgment = 'Y';
                 let reason = [];
 
-                // 일반공간: 100 이하가 1개라도 있으면 부적합
-                const hasGeneralBelowOrEqual100 = listGeneral.some(v => v <= 100);
-                if (hasGeneralBelowOrEqual100) {
+                // 일반공간: 100 미만이 1개라도 있으면 부적합
+                const hasGeneralBelow100 = listGeneral.some(v => v < 100);
+                if (hasGeneralBelow100) {
                     judgment = 'N';
-                    reason.push("일반공간 100 lux 이하 존재");
+                    reason.push("일반공간 100 lux 미만 존재");
                 }
 
-                // 휴식공간: 50 이상이 1개라도 있으면 부적합
-                const hasRestAboveOrEqual50 = listRest.some(v => v >= 50);
-                if (hasRestAboveOrEqual50) {
+                // 휴식공간: 50 초과가 1개라도 있으면 부적합
+                const hasRestAbove50 = listRest.some(v => v > 50);
+                if (hasRestAbove50) {
                     judgment = 'N';
-                    reason.push("휴식공간 50 lux 이상 존재");
+                    reason.push("휴식공간 50 lux 초과 존재");
                 }
 
                 item.eval_value = judgment;
