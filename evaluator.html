@@ -389,8 +389,7 @@
                     ...item,
                     eval_value: null,
                     eval_comment: "",
-                    eval_measurements: ['', '', '', '', ''],
-                    eval_space_type: item.small_item === '조명' ? 'general' : null,
+                    eval_measurements: item.small_item === '조명' ? ['', '', '', '', '', '', '', '', '', ''] : ['', '', '', '', ''],
                     eval_cow_conditions: item.section === '□ 소의 상태 평가' ? [
                         { id: 1, values: {} },
                         { id: 2, values: {} }
@@ -686,28 +685,56 @@
                                         ${isSpecialItem ? `
                                             <div style="margin-bottom: 15px; background: #f7fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
                                                 ${item.small_item === '조명' ? `
-                                                    <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                                                        <span style="font-weight: 600; font-size: 0.85rem; color: #4a5568;">공간 유형:</span>
-                                                        <select onchange="updateLightingSpaceType(${item.id}, this.value)" style="padding: 4px 8px; font-size: 0.85rem; border: 1px solid #cbd5e0; border-radius: 4px; background: #fff; color: #2d3748;">
-                                                            <option value="general" ${(item.eval_space_type || 'general') === 'general' ? 'selected' : ''}>일반공간 (100 lux 이상)</option>
-                                                            <option value="rest" ${(item.eval_space_type || 'general') === 'rest' ? 'selected' : ''}>휴식공간 (50 lux 이하)</option>
-                                                        </select>
+                                                    <!-- 조명 전용 10개 입력 UI (일반공간 5개 + 휴식공간 5개) -->
+                                                    <div style="margin-bottom: 15px;">
+                                                        <div style="font-weight: 600; font-size: 0.85rem; color: #2c7a7b; margin-bottom: 6px;">
+                                                            일반공간 실측치 (100 초과 적합 / 100 이하 1개라도 있으면 부적합)
+                                                        </div>
+                                                        <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+                                                            ${[0, 1, 2, 3, 4].map(idx => {
+                                                                const val = (item.eval_measurements && item.eval_measurements[idx] !== undefined) ? item.eval_measurements[idx] : '';
+                                                                return `
+                                                                    <input type="number" step="any" placeholder="값 ${idx + 1}" 
+                                                                        value="${val}" 
+                                                                        oninput="updateMeasurement(${item.id}, ${idx}, this.value)" 
+                                                                        style="width: 18%; padding: 6px; font-size: 0.8rem; border: 1px solid #cbd5e0; border-radius: 4px; text-align: center;">
+                                                                `;
+                                                            }).join('')}
+                                                        </div>
                                                     </div>
-                                                ` : ''}
-                                                <div style="font-weight: 600; font-size: 0.85rem; color: #4a5568; margin-bottom: 8px;">
-                                                    실측치 기록 (5개 중 최소 2개 입력 필수)
-                                                </div>
-                                                <div style="display: flex; gap: 6px; margin-bottom: 10px;">
-                                                    ${[0, 1, 2, 3, 4].map(idx => {
-                                                        const val = (item.eval_measurements && item.eval_measurements[idx] !== undefined) ? item.eval_measurements[idx] : '';
-                                                        return `
-                                                            <input type="number" step="any" placeholder="값 ${idx + 1}" 
-                                                                value="${val}" 
-                                                                oninput="updateMeasurement(${item.id}, ${idx}, this.value)" 
-                                                                style="width: 18%; padding: 6px; font-size: 0.8rem; border: 1px solid #cbd5e0; border-radius: 4px; text-align: center;">
-                                                        `;
-                                                    }).join('')}
-                                                </div>
+                                                    <div style="margin-bottom: 15px;">
+                                                        <div style="font-weight: 600; font-size: 0.85rem; color: #dd6b20; margin-bottom: 6px;">
+                                                            휴식공간 실측치 (50 미만 적합 / 50 이상 1개라도 있으면 부적합)
+                                                        </div>
+                                                        <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+                                                            ${[5, 6, 7, 8, 9].map(idx => {
+                                                                const val = (item.eval_measurements && item.eval_measurements[idx] !== undefined) ? item.eval_measurements[idx] : '';
+                                                                return `
+                                                                    <input type="number" step="any" placeholder="값 ${idx - 4}" 
+                                                                        value="${val}" 
+                                                                        oninput="updateMeasurement(${item.id}, ${idx}, this.value)" 
+                                                                        style="width: 18%; padding: 6px; font-size: 0.8rem; border: 1px solid #cbd5e0; border-radius: 4px; text-align: center;">
+                                                                `;
+                                                            }).join('')}
+                                                        </div>
+                                                    </div>
+                                                ` : `
+                                                    <!-- 일반 실측형 문항 (공기오염도 등 - 5개 입력 UI) -->
+                                                    <div style="font-weight: 600; font-size: 0.85rem; color: #4a5568; margin-bottom: 8px;">
+                                                        실측치 기록 (5개 중 최소 2개 입력 필수)
+                                                    </div>
+                                                    <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+                                                        ${[0, 1, 2, 3, 4].map(idx => {
+                                                            const val = (item.eval_measurements && item.eval_measurements[idx] !== undefined) ? item.eval_measurements[idx] : '';
+                                                            return `
+                                                                <input type="number" step="any" placeholder="값 ${idx + 1}" 
+                                                                    value="${val}" 
+                                                                    oninput="updateMeasurement(${item.id}, ${idx}, this.value)" 
+                                                                    style="width: 18%; padding: 6px; font-size: 0.8rem; border: 1px solid #cbd5e0; border-radius: 4px; text-align: center;">
+                                                            `;
+                                                        }).join('')}
+                                                    </div>
+                                                `}
                                                 <div id="calc_result_${item.id}" style="font-size: 0.85rem; color: #2d3748; line-height: 1.5; font-weight: 500;">
                                                     ${calculateSpecialResultText(item)}
                                                 </div>
@@ -806,93 +833,84 @@
             }
         }
 
-        // 공간 유형 선택 변경 시 호출되는 함수
-        function updateLightingSpaceType(id, type) {
-            const item = evaluationItems.find(i => i.id === id);
-            if (!item) return;
-
-            item.eval_space_type = type;
-            
-            // 실시간 연산 및 자동 적부 판정 재적용
-            calculateSpecialItem(item);
-
-            // 결과 텍스트 업데이트
-            const resultEl = document.getElementById(`calc_result_${id}`);
-            if (resultEl) {
-                resultEl.innerHTML = calculateSpecialResultText(item);
-            }
-
-            // UI의 라디오 버튼 동적 체크 업데이트
-            const radios = document.getElementsByName(`off_item_${id}`);
-            radios.forEach(radio => {
-                if (radio.value === item.eval_value) {
-                    radio.checked = true;
-                } else {
-                    radio.checked = false;
-                }
-            });
-
-            // UI의 의견란 자동 입력 업데이트
-            const commEl = document.getElementById(`off_comm_${id}`);
-            if (commEl) {
-                commEl.value = item.eval_comment;
-            }
-        }
-
         // 측정결과 계산 텍스트 생성
         function calculateSpecialResultText(item) {
-            const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
-            if (list.length < 2) {
-                return `<span style="color: #e53e3e;"><i class="fas fa-info-circle"></i> 최소 2개 이상의 값을 입력하세요. (현재: ${list.length}개 입력됨)</span>`;
-            }
-            const minVal = Math.min(...list);
-            const sum = list.reduce((a, b) => a + b, 0);
-            const avgVal = parseFloat((sum / list.length).toFixed(2));
-            const status = item.eval_value;
-            const statusText = status === 'Y' ? '<strong style="color: #2c7a7b;">적합(Y)</strong>' : '<strong style="color: #e53e3e;">부적합(N)</strong>';
-            
-            let condText = '';
             if (item.small_item === '조명') {
-                condText = (item.eval_space_type || 'general') === 'general' ? ' (일반공간 기준)' : ' (휴식공간 기준)';
+                const listGeneral = (item.eval_measurements || []).slice(0, 5).filter(v => v !== '' && !isNaN(v)).map(v => parseFloat(v));
+                const listRest = (item.eval_measurements || []).slice(5, 10).filter(v => v !== '' && !isNaN(v)).map(v => parseFloat(v));
+                const totalCount = listGeneral.length + listRest.length;
+                
+                if (totalCount < 2) {
+                    return `<span style="color: #e53e3e;"><i class="fas fa-info-circle"></i> 일반/휴식공간 측정값 합산 최소 2개 이상 입력하세요. (현재: ${totalCount}개 입력됨)</span>`;
+                }
+                
+                const status = item.eval_value;
+                const statusText = status === 'Y' ? '<strong style="color: #2c7a7b;">적합(Y)</strong>' : '<strong style="color: #e53e3e;">부적합(N)</strong>';
+                
+                return `일반공간 측정: <strong>${listGeneral.length}개</strong>, 휴식공간 측정: <strong>${listRest.length}개</strong> &rarr; 판정: ${statusText}`;
+            } else {
+                const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
+                if (list.length < 2) {
+                    return `<span style="color: #e53e3e;"><i class="fas fa-info-circle"></i> 최소 2개 이상의 값을 입력하세요. (현재: ${list.length}개 입력됨)</span>`;
+                }
+                const minVal = Math.min(...list);
+                const sum = list.reduce((a, b) => a + b, 0);
+                const avgVal = parseFloat((sum / list.length).toFixed(2));
+                const status = item.eval_value;
+                const statusText = status === 'Y' ? '<strong style="color: #2c7a7b;">적합(Y)</strong>' : '<strong style="color: #e53e3e;">부적합(N)</strong>';
+                return `평균값: <strong>${avgVal}</strong>, 최소값: <strong>${minVal}</strong> &rarr; 판정: ${statusText}`;
             }
-            
-            return `평균값: <strong>${avgVal}</strong>, 최소값: <strong>${minVal}</strong> &rarr; 판정: ${statusText}${condText}`;
         }
 
         // 조명/공기오염도 자동 적부 연산 로직
         function calculateSpecialItem(item) {
-            const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
-            if (list.length < 2) {
-                item.eval_value = null;
-                item.eval_comment = "측정값이 부족합니다. (최소 2개 필수)";
-                return;
-            }
-
-            const minVal = Math.min(...list);
-            const sum = list.reduce((a, b) => a + b, 0);
-            const avgVal = parseFloat((sum / list.length).toFixed(2));
-
-            let judgment = 'N';
             if (item.small_item === '조명') {
-                const spaceType = item.eval_space_type || 'general';
-                if (spaceType === 'general') {
-                    if (avgVal >= 100) {
-                        judgment = 'Y';
-                    } else {
-                        judgment = 'N';
-                    }
-                    item.eval_value = judgment;
-                    item.eval_comment = `[자동 판정 - 일반공간] 측정값: [${list.join(', ')}], 평균: ${avgVal} lux, 최소: ${minVal} lux (기준: 평균 100 lux 이상 시 적합)`;
-                } else {
-                    if (avgVal <= 50) {
-                        judgment = 'Y';
-                    } else {
-                        judgment = 'N';
-                    }
-                    item.eval_value = judgment;
-                    item.eval_comment = `[자동 판정 - 휴식공간] 측정값: [${list.join(', ')}], 평균: ${avgVal} lux, 최소: ${minVal} lux (기준: 평균 50 lux 이하 시 적합)`;
+                const listGeneral = (item.eval_measurements || []).slice(0, 5).filter(v => v !== '' && !isNaN(v)).map(v => parseFloat(v));
+                const listRest = (item.eval_measurements || []).slice(5, 10).filter(v => v !== '' && !isNaN(v)).map(v => parseFloat(v));
+                const totalCount = listGeneral.length + listRest.length;
+                
+                if (totalCount < 2) {
+                    item.eval_value = null;
+                    item.eval_comment = "측정값이 부족합니다. (일반/휴식공간 합산 최소 2개 필수)";
+                    return;
                 }
+
+                // 적합(Y) 기본값 시작
+                let judgment = 'Y';
+                let reason = [];
+
+                // 일반공간: 100 이하가 1개라도 있으면 부적합
+                const hasGeneralBelowOrEqual100 = listGeneral.some(v => v <= 100);
+                if (hasGeneralBelowOrEqual100) {
+                    judgment = 'N';
+                    reason.push("일반공간 100 lux 이하 존재");
+                }
+
+                // 휴식공간: 50 이상이 1개라도 있으면 부적합
+                const hasRestAboveOrEqual50 = listRest.some(v => v >= 50);
+                if (hasRestAboveOrEqual50) {
+                    judgment = 'N';
+                    reason.push("휴식공간 50 lux 이상 존재");
+                }
+
+                item.eval_value = judgment;
+                
+                const reasonText = reason.length > 0 ? ` (${reason.join(', ')})` : '';
+                item.eval_comment = `[자동 판정] 일반공간: [${listGeneral.join(', ')}], 휴식공간: [${listRest.join(', ')}]${reasonText}`;
+                
             } else if (item.small_item === '공기 오염도') {
+                const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
+                if (list.length < 2) {
+                    item.eval_value = null;
+                    item.eval_comment = "측정값이 부족합니다. (최소 2개 필수)";
+                    return;
+                }
+
+                const minVal = Math.min(...list);
+                const sum = list.reduce((a, b) => a + b, 0);
+                const avgVal = parseFloat((sum / list.length).toFixed(2));
+
+                let judgment = 'N';
                 if (avgVal <= 25) {
                     judgment = 'Y';
                 } else {
