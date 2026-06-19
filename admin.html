@@ -1543,7 +1543,7 @@
 
             let earnedPoints = 0;
             let maxPoints = 0;
-            const details = {};
+            const details = [];
 
             // 문항별 변경 내용 검증 및 점수 재계산
             for (let item of currentEvalItemsList) {
@@ -1565,14 +1565,35 @@
                     return;
                 }
 
-                details[item.id] = {
+                // 기존 데이터에 들어있던 cow_conditions 보존 처리
+                let existingCowConditions = null;
+                if (currentEditingReport && currentEditingReport.details) {
+                    const oldDetails = currentEditingReport.details;
+                    if (Array.isArray(oldDetails)) {
+                        const matched = oldDetails.find(d => d.orig_id === item.id || d.standard === item.standard);
+                        if (matched) existingCowConditions = matched.cow_conditions;
+                    } else {
+                        if (oldDetails[item.id]) {
+                            existingCowConditions = oldDetails[item.id].cow_conditions;
+                        }
+                    }
+                }
+
+                details.push({
+                    orig_id: item.id,
+                    section: item.section || '',
+                    large_item: item.large_item || '',
+                    small_item: item.small_item || '',
+                    standard: item.standard || '',
+                    compliance_criteria: item.compliance_criteria || '',
                     status: selectedValue,
-                    comment: commentVal,
-                    large_item: item.large_item,
-                    small_item: item.small_item,
-                    standard: item.standard,
-                    compliance_criteria: item.compliance_criteria
-                };
+                    comment: commentVal || '',
+                    measurements: (currentEditingReport && currentEditingReport.details && 
+                                   (Array.isArray(currentEditingReport.details) ? 
+                                    (currentEditingReport.details.find(d => d.orig_id === item.id) || {}).measurements : 
+                                    (currentEditingReport.details[item.id] || {}).measurements)) || [],
+                    cow_conditions: existingCowConditions
+                });
 
                 // 점수 계산 (N/A 및 생략 건은 제외)
                 if (selectedValue !== null && selectedValue !== 'N/A') {

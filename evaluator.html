@@ -1050,19 +1050,21 @@
 
             let earnedPoints = 0;
             let maxPoints = 0;
-            let details = {};
+            let details = [];
 
             evaluationItems.forEach(item => {
-                details[item.id] = { 
-                    status: item.eval_value, 
-                    comment: item.eval_comment,
+                details.push({
+                    orig_id: item.id,
+                    section: item.section || '',
+                    large_item: item.large_item || '',
+                    small_item: item.small_item || '',
+                    standard: item.standard || '',
+                    compliance_criteria: item.compliance_criteria || '',
+                    status: item.eval_value,
+                    comment: item.eval_comment || '',
                     measurements: item.eval_measurements || [],
-                    cow_conditions: item.section === '□ 소의 상태 평가' ? (evaluationItems.find(i => i.section === '□ 소의 상태 평가').eval_cow_conditions || null) : null,
-                    large_item: item.large_item,
-                    small_item: item.small_item,
-                    standard: item.standard,
-                    compliance_criteria: item.compliance_criteria
-                };
+                    cow_conditions: item.section === '□ 소의 상태 평가' ? (evaluationItems.find(i => i.section === '□ 소의 상태 평가').eval_cow_conditions || null) : null
+                });
                 
                 // 만약 평가자가 값을 선택하지 않고 생략했거나 'N/A'(해당사항없음)를 체크했다면 점수 계산에서 아예 제외
                 if (item.eval_value === null || item.eval_value === 'N/A') {

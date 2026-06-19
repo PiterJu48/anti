@@ -185,16 +185,38 @@
                 return acc;
             }, {});
 
+            // details가 배열인지 객체인지 판별하여 정규화된 배열 구조 생성
+            const details = data.details || {};
+            let normalizedDetails = [];
+            if (Array.isArray(details)) {
+                normalizedDetails = details;
+            } else {
+                normalizedDetails = Object.keys(details).map(key => {
+                    const itemDetail = details[key];
+                    return {
+                        orig_id: parseInt(key),
+                        status: itemDetail.status,
+                        comment: itemDetail.comment || '',
+                        measurements: itemDetail.measurements || [],
+                        cow_conditions: itemDetail.cow_conditions || null,
+                        large_item: itemDetail.large_item || '',
+                        small_item: itemDetail.small_item || '',
+                        standard: itemDetail.standard || '',
+                        compliance_criteria: itemDetail.compliance_criteria || ''
+                    };
+                });
+            }
+
             // 적합/부적합 통계 계산
             let compliantCount = 0;
             let nonCompliantCount = 0;
 
             if (type === 'official') {
-                Object.entries(data.details).forEach(([itemId, val]) => {
-                    const item = itemMap[itemId];
-                    if (!item) return;
+                normalizedDetails.forEach((val) => {
+                    if (val.status === 'NA' || val.status === 'N/A' || val.status === null) return;
                     
-                    const options = parseOptions(item.compliance_criteria);
+                    const compCriteria = val.compliance_criteria || '';
+                    const options = parseOptions(compCriteria);
                     const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
                     
                     if (numericValues.length > 0) {
@@ -219,16 +241,13 @@
             document.getElementById('res_y').innerText = compliantCount;
             document.getElementById('res_n').innerText = nonCompliantCount;
 
-            const details = data.details || {};
-            const sortedDetailKeys = Object.keys(details).map(k => parseInt(k)).sort((a, b) => a - b);
-
             const detailContainer = document.getElementById('res_details');
-            detailContainer.innerHTML = Object.keys(details).map(key => {
+            detailContainer.innerHTML = normalizedDetails.map((itemDetail, index) => {
                 let status = 'NA';
                 let comment = '';
                 
                 let evalItem = null;
-                const itemDetail = details[key];
+                const key = itemDetail.orig_id || index;
                 
                 if (type === 'official') {
                     status = itemDetail ? itemDetail.status : 'NA';
@@ -246,16 +265,14 @@
                     status = itemDetail || 'N';
                 }
 
-                if (status === 'NA') return ''; // 공식 평가에서 NA는 제외
+                if (status === 'NA' || status === 'N/A') return ''; // 공식 평가에서 NA는 제외
                 
                 if (!evalItem) {
                     if (itemMap[key]) {
                         evalItem = itemMap[key];
                     } else {
-                        const keyInt = parseInt(key);
-                        const idx = sortedDetailKeys.indexOf(keyInt);
-                        if (idx !== -1 && items && items[idx]) {
-                            evalItem = items[idx];
+                        if (items && items[index]) {
+                            evalItem = items[index];
                         } else {
                             evalItem = {
                                 large_item: '미확인 대항목',
