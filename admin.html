@@ -1344,7 +1344,148 @@
                 });
             }
             
+            // 3가지 기준 판정 로직 추가
+            let groupA_earned = 0;
+            let groupA_max = 0;
+            let groupB_earned = 0;
+            let groupB_max = 0;
+            let nonCompliantYNItems = []; // 부적합 적부 항목 리스트
+
+            normalizedDetails.forEach(itemDetail => {
+                const key = (itemDetail && itemDetail.orig_id !== undefined && itemDetail.orig_id !== null) ? itemDetail.orig_id : null;
+                let evalItem = null;
+                if (itemDetail && itemDetail.standard !== undefined && itemDetail.standard !== null && String(itemDetail.standard).trim() !== '') {
+                    evalItem = itemDetail;
+                } else if (key && itemMap[key]) {
+                    evalItem = itemMap[key];
+                }
+                
+                const section = evalItem ? evalItem.section : (itemDetail.section || '');
+                const compliance_criteria = evalItem ? evalItem.compliance_criteria : (itemDetail.compliance_criteria || '');
+                const status = itemDetail.status;
+                
+                if (status === null || status === 'N/A' || status === 'NA') return;
+                
+                const options = parseOptions(compliance_criteria);
+                const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+                
+                const isGroupA = [
+                    '□ 일반기준',
+                    '□ 사양관리 방법',
+                    '□ 사육시설 및 환경',
+                    '□ 동물복지형 자유방목(추가 사항)'
+                ].includes(section);
+                
+                const isGroupB = (section === '□ 소의 상태 평가');
+                
+                if (numericValues.length > 0) {
+                    // 점수형 문항
+                    const maxVal = Math.max(...numericValues);
+                    let earnedVal = parseFloat(status);
+                    if (isNaN(earnedVal)) earnedVal = 0;
+                    
+                    if (isGroupA) {
+                        groupA_earned += earnedVal;
+                        groupA_max += maxVal;
+                    } else if (isGroupB) {
+                        groupB_earned += earnedVal;
+                        groupB_max += maxVal;
+                    }
+                } else {
+                    // 적부형 문항
+                    let earnedVal = 0;
+                    let maxVal = 0;
+                    if (status === 'Y') {
+                        earnedVal = 1;
+                        maxVal = 1;
+                    } else if (status === 'N') {
+                        maxVal = 1;
+                        nonCompliantYNItems.push({
+                            standard: evalItem ? evalItem.standard : itemDetail.standard,
+                            large_item: evalItem ? evalItem.large_item : itemDetail.large_item,
+                            small_item: evalItem ? evalItem.small_item : itemDetail.small_item
+                        });
+                    }
+                    
+                    if (isGroupA) {
+                        groupA_earned += earnedVal;
+                        groupA_max += maxVal;
+                    } else if (isGroupB) {
+                        groupB_earned += earnedVal;
+                        groupB_max += maxVal;
+                    }
+                }
+            });
+
+            const scoreA = groupA_max > 0 ? Math.round((groupA_earned / groupA_max) * 100) : 0;
+            const scoreB = groupB_max > 0 ? Math.round((groupB_earned / groupB_max) * 100) : 0;
+            
+            // 최종 합격/불합격 판정
+            const isGroupAPass = scoreA >= 85;
+            const isGroupBPass = scoreB >= 25;
+            const isYNPass = nonCompliantYNItems.length === 0;
+            const finalPassed = isGroupAPass && isGroupBPass && isYNPass;
+            
             let detailsHtml = `
+                <!-- 최종 인증 심사 결과 판정 보드 -->
+                <div class="card" style="border: 2px solid ${finalPassed ? '#2c7a7b' : '#e53e3e'}; background: ${finalPassed ? '#e6fffa' : '#fff5f5'}; margin-bottom: 20px; padding: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid ${finalPassed ? '#b2f5ea' : '#fed7d7'}; padding-bottom: 12px; margin-bottom: 15px;">
+                        <h4 style="margin: 0; font-size: 1.15rem; color: ${finalPassed ? '#234e52' : '#742a2a'}; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas ${finalPassed ? 'fa-check-circle' : 'fa-times-circle'}"></i> 
+                            최종 인증 판정 결과
+                        </h4>
+                        <span class="status-badge" style="font-size: 1rem; padding: 6px 16px; font-weight: 700; border-radius: 4px; ${finalPassed ? 'background: #2c7a7b; color: #fff;' : 'background: #e53e3e; color: #fff;'}">
+                            ${finalPassed ? '인증 적합 (합격)' : '인증 부적합 (불합격)'}
+                        </span>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 10px;">
+                        <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
+                            <div style="font-size: 0.85rem; color: #718096; font-weight: 600; margin-bottom: 4px;">일반 환경 점수 (A그룹)</div>
+                            <div style="font-size: 1.2rem; font-weight: 700; color: ${isGroupAPass ? '#2c7a7b' : '#e53e3e'};">
+                                ${scoreA}점 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 85점 이상</span>
+                            </div>
+                            <span style="font-size: 0.75rem; font-weight: 600; color: ${isGroupAPass ? '#2c7a7b' : '#e53e3e'}; display: inline-block; margin-top: 4px;">
+                                ${isGroupAPass ? '● 통과' : '● 탈락'}
+                            </span>
+                        </div>
+                        <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
+                            <div style="font-size: 0.85rem; color: #718096; font-weight: 600; margin-bottom: 4px;">소 상태 평가 점수 (B그룹)</div>
+                            <div style="font-size: 1.2rem; font-weight: 700; color: ${isGroupBPass ? '#2c7a7b' : '#e53e3e'};">
+                                ${scoreB}점 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 25점 이상</span>
+                            </div>
+                            <span style="font-size: 0.75rem; font-weight: 600; color: ${isGroupBPass ? '#2c7a7b' : '#e53e3e'}; display: inline-block; margin-top: 4px;">
+                                ${isGroupBPass ? '● 통과' : '● 탈락'}
+                            </span>
+                        </div>
+                        <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
+                            <div style="font-size: 0.85rem; color: #718096; font-weight: 600; margin-bottom: 4px;">적부 문항 부적합 개수</div>
+                            <div style="font-size: 1.2rem; font-weight: 700; color: ${isYNPass ? '#2c7a7b' : '#e53e3e'};">
+                                ${nonCompliantYNItems.length}개 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 0개</span>
+                            </div>
+                            <span style="font-size: 0.75rem; font-weight: 600; color: ${isYNPass ? '#2c7a7b' : '#e53e3e'}; display: inline-block; margin-top: 4px;">
+                                ${isYNPass ? '● 통과' : '● 탈락'}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    ${!finalPassed ? `
+                        <div style="background: #fffaf0; border: 1px solid #feebc8; border-radius: 6px; padding: 12px; margin-top: 15px; text-align: left;">
+                            <h5 style="margin: 0 0 8px 0; color: #dd6b20; font-size: 0.9rem;"><i class="fas fa-exclamation-triangle"></i> 부적합 판단 근거 상세 사유</h5>
+                            <ul style="margin: 0; padding-left: 20px; font-size: 0.85rem; color: #7b341e; line-height: 1.6;">
+                                ${!isGroupAPass ? `<li>일반 사육환경 영역(A그룹)의 합계점수 비율이 85점 미만입니다. (현재: <strong>${scoreA}점</strong>)</li>` : ''}
+                                ${!isGroupBPass ? `<li>소의 상태 평가 영역(B그룹)의 합계점수 비율이 25점 미만입니다. (현재: <strong>${scoreB}점</strong>)</li>` : ''}
+                                ${!isYNPass ? `
+                                    <li>필수 적부 항목 중 <strong>부적합(N)</strong> 판정된 항목이 존재합니다 (${nonCompliantYNItems.length}건):
+                                        <ul style="margin: 4px 0; padding-left: 15px; color: #9c4221; font-size: 0.8rem; list-style-type: circle;">
+                                            ${nonCompliantYNItems.map(item => `<li>[${item.large_item || '미확인'}${item.small_item ? ' - ' + item.small_item : ''}] ${item.standard}</li>`).join('')}
+                                        </ul>
+                                    </li>
+                                ` : ''}
+                            </ul>
+                        </div>
+                    ` : ''}
+                </div>
                 <div class="card" style="background: #f8fafc; margin-bottom: 20px;">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <div>
