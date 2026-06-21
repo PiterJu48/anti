@@ -63,9 +63,9 @@
             <div id="dashboardTab" class="tab-content">
                 <section class="card-grid">
                     <div class="card">
-                        <h3><i class="fas fa-user-plus"></i> 신규 농장</h3>
+                        <h3><i class="fas fa-user-plus"></i> 신규농장</h3>
                         <div id="newAuditCount" style="font-size: 2rem; font-weight: 700; color: var(--primary-color);">0 건</div>
-                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">심사대상 중 신규 농장 수</p>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">심사대상 중 신규농장 수</p>
                     </div>
                     <div class="card">
                         <h3><i class="fas fa-search"></i> 갱신농장</h3>
@@ -1873,15 +1873,13 @@
                     const statusText = isCompleted ? '평가완료' : '미실시';
                     const statusBadgeClass = isCompleted ? 'status-complete' : 'status-pending';
 
-                    // 미실시(심사대상) 상태일 때 유형별 카운트 증가
-                    if (!isCompleted) {
-                        if (auditType === '신규') {
-                            newCount++;
-                        } else if (auditType === '갱신') {
-                            renewCount++;
-                        } else if (auditType === '사후관리') {
-                            postCount++;
-                        }
+                    // farms 테이블의 remarks 컬럼에서 심사유형별 개수 누적
+                    if (auditType === '신규') {
+                        newCount++;
+                    } else if (auditType === '갱신') {
+                        renewCount++;
+                    } else if (auditType === '사후관리') {
+                        postCount++;
                     }
 
                     // onclick 핸들러에 농장 객체를 안전하게 넘기기 위해 인코딩 처리
