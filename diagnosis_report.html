@@ -145,6 +145,35 @@
             return options;
         }
 
+        // 평가항목 정렬 함수 (표준 섹션 순서대로 정렬)
+        function sortEvaluationItems(items) {
+            const SECTION_ORDER = [
+                "□ 일반기준",
+                "□ 사양관리 방법",
+                "□ 사육시설 및 환경",
+                "□ 소의 상태 평가",
+                "□ 동물복지형 자유방목(추가 사항)",
+                "□ 동물복지형 자유방목 (추가사항)"
+            ];
+            
+            return [...items].sort((a, b) => {
+                const sectA = a.section || "";
+                const sectB = b.section || "";
+                
+                const cleanSect = s => s.trim().replace(/\s+/g, '');
+                const idxA = SECTION_ORDER.findIndex(sec => cleanSect(sectA) === cleanSect(sec));
+                const idxB = SECTION_ORDER.findIndex(sec => cleanSect(sectB) === cleanSect(sec));
+                
+                const valA = idxA === -1 ? 99 : idxA;
+                const valB = idxB === -1 ? 99 : idxB;
+                
+                if (valA !== valB) {
+                    return valA - valB;
+                }
+                return a.id - b.id;
+            });
+        }
+
         async function loadReport() {
             const urlParams = new URLSearchParams(window.location.search);
             const id = urlParams.get('id');
@@ -178,7 +207,8 @@
             }
 
             // 상세 내역 매핑을 위해 평가항목 다시 로드
-            const { data: items } = await db.from('evaluation_items').select('id, large_item, small_item, standard, compliance_criteria').order('id', { ascending: true });
+            const { data: rawItems } = await db.from('evaluation_items').select('id, large_item, small_item, standard, compliance_criteria').order('id', { ascending: true });
+            const items = sortEvaluationItems(rawItems);
             
             const itemMap = items.reduce((acc, item) => {
                 acc[item.id] = item;
@@ -218,6 +248,14 @@
                     };
                 });
             }
+
+            // 정렬된 items의 ID 순서에 따라서 normalizedDetails 정렬
+            const sortedIds = items.map(it => it.id);
+            normalizedDetails.sort((a, b) => {
+                const idxA = sortedIds.indexOf(a.orig_id);
+                const idxB = sortedIds.indexOf(b.orig_id);
+                return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+            });
 
             // 적합/부적합 통계 계산
             let compliantCount = 0;

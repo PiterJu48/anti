@@ -188,6 +188,35 @@
         let sectionChartInstance = null; // Chart.js 차트 인스턴스 전역 보관용
         let diagnosisItems = []; // 자가진단 평가 항목 보관용 전역 변수
 
+        // 평가항목 정렬 함수 (표준 섹션 순서대로 정렬)
+        function sortEvaluationItems(items) {
+            const SECTION_ORDER = [
+                "□ 일반기준",
+                "□ 사양관리 방법",
+                "□ 사육시설 및 환경",
+                "□ 소의 상태 평가",
+                "□ 동물복지형 자유방목(추가 사항)",
+                "□ 동물복지형 자유방목 (추가사항)"
+            ];
+            
+            return [...items].sort((a, b) => {
+                const sectA = a.section || "";
+                const sectB = b.section || "";
+                
+                const cleanSect = s => s.trim().replace(/\s+/g, '');
+                const idxA = SECTION_ORDER.findIndex(sec => cleanSect(sectA) === cleanSect(sec));
+                const idxB = SECTION_ORDER.findIndex(sec => cleanSect(sectB) === cleanSect(sec));
+                
+                const valA = idxA === -1 ? 99 : idxA;
+                const valB = idxB === -1 ? 99 : idxB;
+                
+                if (valA !== valB) {
+                    return valA - valB;
+                }
+                return a.id - b.id;
+            });
+        }
+
         // 적합 기준 텍스트를 파싱하여 라디오 버튼 옵션 배열로 반환하는 함수
         function parseOptions(criteriaText) {
             if (!criteriaText || criteriaText.trim() === "") {
@@ -284,11 +313,13 @@
                 document.getElementById('hasResultContent').style.display = 'block';
 
                 // 2. 전체 평가항목 조회 (섹션 및 문항 매핑용)
-                const { data: evalItems, error: itemsError } = await db.from('evaluation_items')
+                const { data: rawEvalItems, error: itemsError } = await db.from('evaluation_items')
                     .select('*')
                     .order('id', { ascending: true });
 
                 if (itemsError) throw itemsError;
+                
+                const evalItems = sortEvaluationItems(rawEvalItems);
 
                 // 3. 최근 진단내역 details 파싱
                 let details = latestReport.details || {};
@@ -515,10 +546,12 @@
             
             const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
             if (error) return alert('평가항목을 불러오는 데 실패했습니다.');
-            diagnosisItems = data;
+            
+            const sortedData = sortEvaluationItems(data);
+            diagnosisItems = sortedData;
 
             const container = document.getElementById('evalItemsContainer');
-            const grouped = data.reduce((acc, item) => {
+            const grouped = sortedData.reduce((acc, item) => {
                 if (!acc[item.section]) acc[item.section] = [];
                 acc[item.section].push(item);
                 return acc;

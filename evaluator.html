@@ -181,6 +181,35 @@
         // 평가 상태를 저장할 전역 변수들
         let evaluationItems = [];      // 모든 평가 항목 원본 데이터
         let largeItemGroups = [];      // 대항목으로 그룹화된 데이터
+
+        // 평가항목 정렬 함수 (표준 섹션 순서대로 정렬)
+        function sortEvaluationItems(items) {
+            const SECTION_ORDER = [
+                "□ 일반기준",
+                "□ 사양관리 방법",
+                "□ 사육시설 및 환경",
+                "□ 소의 상태 평가",
+                "□ 동물복지형 자유방목(추가 사항)",
+                "□ 동물복지형 자유방목 (추가사항)"
+            ];
+            
+            return [...items].sort((a, b) => {
+                const sectA = a.section || "";
+                const sectB = b.section || "";
+                
+                const cleanSect = s => s.trim().replace(/\s+/g, '');
+                const idxA = SECTION_ORDER.findIndex(sec => cleanSect(sectA) === cleanSect(sec));
+                const idxB = SECTION_ORDER.findIndex(sec => cleanSect(sectB) === cleanSect(sec));
+                
+                const valA = idxA === -1 ? 99 : idxA;
+                const valB = idxB === -1 ? 99 : idxB;
+                
+                if (valA !== valB) {
+                    return valA - valB;
+                }
+                return a.id - b.id;
+            });
+        }
         let currentGroupIndex = 0;     // 현재 표시 중인 대항목 그룹의 인덱스
 
         // 사이드바 토글
@@ -384,8 +413,10 @@
                 const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
                 if (error) throw error;
 
+                const sortedData = sortEvaluationItems(data);
+
                 // 1. 메모리 데이터 초기화 (라디오 버튼 및 의견 필드 백업용)
-                evaluationItems = data.map(item => ({
+                evaluationItems = sortedData.map(item => ({
                     ...item,
                     eval_value: null,
                     eval_comment: "",

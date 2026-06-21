@@ -514,23 +514,54 @@
             if (tabName === 'results') fetchResults();
         }
 
+        // 평가항목 정렬 함수 (표준 섹션 순서대로 정렬)
+        function sortEvaluationItems(items) {
+            const SECTION_ORDER = [
+                "□ 일반기준",
+                "□ 사양관리 방법",
+                "□ 사육시설 및 환경",
+                "□ 소의 상태 평가",
+                "□ 동물복지형 자유방목(추가 사항)",
+                "□ 동물복지형 자유방목 (추가사항)"
+            ];
+            
+            return [...items].sort((a, b) => {
+                const sectA = a.section || "";
+                const sectB = b.section || "";
+                
+                const cleanSect = s => s.trim().replace(/\s+/g, '');
+                const idxA = SECTION_ORDER.findIndex(sec => cleanSect(sectA) === cleanSect(sec));
+                const idxB = SECTION_ORDER.findIndex(sec => cleanSect(sectB) === cleanSect(sec));
+                
+                const valA = idxA === -1 ? 99 : idxA;
+                const valB = idxB === -1 ? 99 : idxB;
+                
+                if (valA !== valB) {
+                    return valA - valB;
+                }
+                return a.id - b.id;
+            });
+        }
+
         // 평가항목 데이터 로드
         async function fetchEvalItems() {
             const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
             if (error) return console.error(error);
             
+            const sortedData = sortEvaluationItems(data);
+            
             // 섹션 목록 추출 (드롭다운용)
-            const uniqueSections = [...new Set(data.map(item => item.section))];
+            const uniqueSections = [...new Set(sortedData.map(item => item.section))];
             const sectionSelect = document.getElementById('ei_section');
             sectionSelect.innerHTML = uniqueSections.map(s => `<option value="${s}">${s}</option>`).join('');
 
             // 대항목 목록 추출 (드롭다운용)
-            const uniqueLargeItems = [...new Set(data.map(item => item.large_item))];
+            const uniqueLargeItems = [...new Set(sortedData.map(item => item.large_item))];
             const largeSelect = document.getElementById('ei_large');
             largeSelect.innerHTML = uniqueLargeItems.map(l => `<option value="${l}">${l}</option>`).join('');
 
             // 섹션별 그룹화
-            const grouped = data.reduce((acc, item) => {
+            const grouped = sortedData.reduce((acc, item) => {
                 if (!acc[item.section]) acc[item.section] = [];
                 acc[item.section].push(item);
                 return acc;
@@ -1641,13 +1672,14 @@
                 alert('평가 항목을 가져오는데 실패했습니다: ' + itemsError.message);
                 return;
             }
-            currentEvalItemsList = evalItems;
+            const sortedItems = sortEvaluationItems(evalItems);
+            currentEvalItemsList = sortedItems;
 
             const tbody = document.getElementById('editReportItemsBody');
             const details = report.details || {};
             const sortedDetailKeys = Object.keys(details).map(k => parseInt(k)).sort((a, b) => a - b);
 
-            tbody.innerHTML = evalItems.map((item, idx) => {
+            tbody.innerHTML = sortedItems.map((item, idx) => {
                 let itemDetail = { status: null, comment: '' };
                 if (details[item.id]) {
                     itemDetail = details[item.id];
@@ -2039,10 +2071,22 @@
                 excelData.push(["평가 상세 내역", "", "", ""]);
                 excelData.push(["번호", "평가 대항목 / 소항목", "평가 기준", "평가 결과(값)", "평가 의견"]);
 
+                // 정렬된 평가항목 순서 보장
+                const sortedEvalItems = sortEvaluationItems(evalItems);
+
                 let index = 1;
-                Object.keys(details).forEach(key => {
-                    const itemDetail = details[key];
-                    const evalItem = itemMap[key] || {};
+                const detailItems = Array.isArray(details) ? details : Object.keys(details).map(k => ({ orig_id: parseInt(k), ...details[k] }));
+                
+                // 정렬된 items의 ID 순서에 따라서 detailItems 정렬
+                const sortedIds = sortedEvalItems.map(it => it.id);
+                detailItems.sort((a, b) => {
+                    const idxA = sortedIds.indexOf(a.orig_id);
+                    const idxB = sortedIds.indexOf(b.orig_id);
+                    return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+                });
+
+                detailItems.forEach(itemDetail => {
+                    const evalItem = itemMap[itemDetail.orig_id] || {};
                     const standardText = evalItem.standard || '미확인 문항';
                     const groupText = `[${evalItem.large_item || '-'}] ${evalItem.small_item || ''}`;
                     
