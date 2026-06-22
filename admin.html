@@ -9,8 +9,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="auth.js"></script>
-    <!-- SheetJS 라이브러리 추가 (Excel 내보내기용) -->
+    <!-- SheetJS 및 ExcelJS 라이브러리 추가 (Excel 내보내기 및 스타일 보존용) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -2028,7 +2029,7 @@
         setInterval(updateTime, 1000);
         updateTime();
 
-        // 평가 결과 엑셀 다운로드 기능
+        // 평가 결과 엑셀 다운로드 기능 (ExcelJS를 사용하여 스타일 보존)
         async function exportToExcel(reportId) {
             try {
                 // 1. 해당 보고서 데이터 로드
@@ -2055,37 +2056,25 @@
                 const details = report.details || {};
                 const detailItems = Array.isArray(details) ? details : Object.keys(details).map(k => ({ orig_id: parseInt(k), ...details[k] }));
 
-                // 3. result.xlsx 템플릿 파일 비동기 로드 (캐시 방지 쿼리 스트링 추가)
+                // 3. result.xlsx 템플릿 파일 비동기 로드
                 const response = await fetch('result.xlsx?_ts=' + Date.now());
                 if (!response.ok) {
                     throw new Error('result.xlsx 템플릿 파일을 로드할 수 없습니다.');
                 }
                 const arrayBuffer = await response.arrayBuffer();
-                console.log("Fetched file size (bytes):", arrayBuffer.byteLength);
-                const data = new Uint8Array(arrayBuffer);
-                const wb = XLSX.read(data, { type: 'array' });
-                console.log("Parsed Sheets keys:", Object.keys(wb.Sheets));
-                console.log("Parsed SheetNames:", wb.SheetNames);
-                const sheetsKeys = Object.keys(wb.Sheets);
-                if (sheetsKeys.length === 0) {
-                    throw new Error('엑셀 템플릿 내에서 유효한 시트를 찾을 수 없습니다. result.xlsx 파일이 손상되었거나 서빙 인코딩 문제일 수 있습니다. (바이트 크기: ' + arrayBuffer.byteLength + ')');
-                }
-                const ws = wb.Sheets[sheetsKeys[0]];
 
-                // 4. 셀 값 업데이트 헬퍼 함수 정의
+                // 4. ExcelJS 워크북 로드
+                const workbook = new ExcelJS.Workbook();
+                await workbook.xlsx.load(arrayBuffer);
+                const ws = workbook.getWorksheet(1); // 첫 번째 시트 얻기
+
+                // 5. 셀 값 업데이트 헬퍼 함수 정의
                 function updateCell(cellAddress, val) {
-                    if (!ws[cellAddress]) {
-                        ws[cellAddress] = { t: 's', v: '' };
-                    }
-                    ws[cellAddress].v = val;
-                    if (typeof val === 'number') {
-                        ws[cellAddress].t = 'n';
-                    } else {
-                        ws[cellAddress].t = 's';
-                    }
+                    const cell = ws.getCell(cellAddress);
+                    cell.value = val;
                 }
 
-                // 5. 3행에 농장 기본 정보 업데이트 (A3: 농장명, B3: 대표자명, C3: 주소, E3: 시설규모, F3: 전화번호, G3: 종합 의견)
+                // 6. 3행에 농장 기본 정보 업데이트 (A3: 농장명, B3: 대표자명, C3: 주소, E3: 시설규모, F3: 전화번호, G3: 종합 의견)
                 if (report.farms) {
                     updateCell('A3', report.farms.name || '');
                     updateCell('B3', report.farms.representative || '');
@@ -2095,17 +2084,17 @@
                 }
                 updateCell('G3', report.summary || '의견 없음');
 
-                // 6. 각 평가 항목 결과값 매핑 (6행~137행 순회하며 G열 업데이트)
+                // 7. 각 평가 항목 결과값 매핑 (6행~137행 순회하며 G열 업데이트)
                 function cleanText(str) {
                     if (!str) return '';
                     return String(str).replace(/\s+/g, '').replace(/․/g, '.');
                 }
 
                 for (let r = 6; r <= 137; r++) {
-                    const cellB = ws[`B${r}`];
-                    const cellC = ws[`C${r}`];
-                    const textB = cellB ? cleanText(cellB.v) : '';
-                    const textC = cellC ? cleanText(cellC.v) : '';
+                    const cellB = ws.getCell(`B${r}`).value;
+                    const cellC = ws.getCell(`C${r}`).value;
+                    const textB = cellB ? cleanText(cellB) : '';
+                    const textC = cellC ? cleanText(cellC) : '';
 
                     if (!textB && !textC) continue;
 
@@ -2128,15 +2117,15 @@
                     }
                 }
 
-                // 7. 심사 정보 업데이트 (A122: 심사기간, A123: 심사원)
+                // 8. 심사 정보 업데이트 (A122: 심사기간, A123: 심사원)
                 const evalDate = new Date(report.created_at);
                 const dateStr = !isNaN(evalDate.getTime()) ? `${evalDate.getFullYear()}년 ${evalDate.getMonth() + 1}월 ${evalDate.getDate()}일` : '';
                 updateCell('A122', `인증심사기간 : ${dateStr}`);
                 updateCell('A123', `인증심사원 : ${getEvaluatorName(report.evaluator_id)}`);
 
-                // 8. 파일 다운로드 실행 (type: 'array'로 바이너리 그대로 출력하여 인코딩 손상 방지)
-                const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-                const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                // 9. 파일 다운로드 실행 (ExcelJS writeBuffer를 통한 손상 방지)
+                const buffer = await workbook.xlsx.writeBuffer();
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
                 const fileName = `${report.farms ? report.farms.name : '농장'}_평가결과_${new Date().toISOString().substring(0, 10)}.xlsx`;
 
                 const link = document.createElement('a');
