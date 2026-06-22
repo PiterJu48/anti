@@ -2053,75 +2053,98 @@
                 });
 
                 const details = report.details || {};
-
-                // 3. 엑셀에 내보낼 데이터 배열 가공
-                const excelData = [];
-
-                // 기본 정보 헤더 추가
-                excelData.push(["동물복지인증 평가 보고서", "", "", ""]);
-                excelData.push([]);
-                excelData.push(["평가 기본 정보", "", "", ""]);
-                excelData.push(["농장명", report.farms ? report.farms.name : '-', "평가자 ID", report.evaluator_id]);
-                excelData.push(["대표자", report.farms ? report.farms.representative : '-', "평가 점수", report.score + "점"]);
-                excelData.push(["소재지", report.farms ? report.farms.address : '-', "평가 일시", new Date(report.created_at).toLocaleString()]);
-                excelData.push(["종합 의견", report.summary || '의견 없음', "", ""]);
-                excelData.push([]);
-
-                // 평가 상세 내역 헤더 추가
-                excelData.push(["평가 상세 내역", "", "", ""]);
-                excelData.push(["번호", "평가 대항목 / 소항목", "평가 기준", "평가 결과(값)", "평가 의견"]);
-
-                // 정렬된 평가항목 순서 보장
-                const sortedEvalItems = sortEvaluationItems(evalItems);
-
-                let index = 1;
                 const detailItems = Array.isArray(details) ? details : Object.keys(details).map(k => ({ orig_id: parseInt(k), ...details[k] }));
-                
-                // 정렬된 items의 ID 순서에 따라서 detailItems 정렬
-                const sortedIds = sortedEvalItems.map(it => it.id);
-                detailItems.sort((a, b) => {
-                    const idxA = sortedIds.indexOf(a.orig_id);
-                    const idxB = sortedIds.indexOf(b.orig_id);
-                    return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
-                });
 
-                detailItems.forEach(itemDetail => {
-                    const evalItem = itemMap[itemDetail.orig_id] || {};
-                    const standardText = evalItem.standard || '미확인 문항';
-                    const groupText = `[${evalItem.large_item || '-'}] ${evalItem.small_item || ''}`;
-                    
-                    // 적합기준 파싱하여 라벨 매핑
-                    const options = parseOptions(evalItem.compliance_criteria);
-                    const matchedOption = options.find(o => o.value === itemDetail.status);
-                    const statusText = matchedOption ? matchedOption.label : (itemDetail.status || '-');
+                // 3. result.xlsx 템플릿 파일 비동기 로드 (캐시 방지 쿼리 스트링 추가)
+                const response = await fetch('result.xlsx?_ts=' + Date.now());
+                if (!response.ok) {
+                    throw new Error('result.xlsx 템플릿 파일을 로드할 수 없습니다.');
+                }
+                const arrayBuffer = await response.arrayBuffer();
+                console.log("Fetched file size (bytes):", arrayBuffer.byteLength);
+                const data = new Uint8Array(arrayBuffer);
+                const wb = XLSX.read(data, { type: 'array' });
+                console.log("Parsed Sheets keys:", Object.keys(wb.Sheets));
+                console.log("Parsed SheetNames:", wb.SheetNames);
+                const sheetsKeys = Object.keys(wb.Sheets);
+                if (sheetsKeys.length === 0) {
+                    throw new Error('엑셀 템플릿 내에서 유효한 시트를 찾을 수 없습니다. result.xlsx 파일이 손상되었거나 서빙 인코딩 문제일 수 있습니다. (바이트 크기: ' + arrayBuffer.byteLength + ')');
+                }
+                const ws = wb.Sheets[sheetsKeys[0]];
 
-                    excelData.push([
-                        index++,
-                        groupText,
-                        standardText,
-                        statusText,
-                        itemDetail.comment || '-'
-                    ]);
-                });
+                // 4. 셀 값 업데이트 헬퍼 함수 정의
+                function updateCell(cellAddress, val) {
+                    if (!ws[cellAddress]) {
+                        ws[cellAddress] = { t: 's', v: '' };
+                    }
+                    ws[cellAddress].v = val;
+                    if (typeof val === 'number') {
+                        ws[cellAddress].t = 'n';
+                    } else {
+                        ws[cellAddress].t = 's';
+                    }
+                }
 
-                // 4. 워크북 및 워크시트 생성
-                const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.aoa_to_sheet(excelData);
+                // 5. 3행에 농장 기본 정보 업데이트 (A3: 농장명, B3: 대표자명, C3: 주소, E3: 시설규모, F3: 전화번호, G3: 종합 의견)
+                if (report.farms) {
+                    updateCell('A3', report.farms.name || '');
+                    updateCell('B3', report.farms.representative || '');
+                    updateCell('C3', report.farms.address || '');
+                    updateCell('E3', report.farms.facility_scale || '');
+                    updateCell('F3', report.farms.phone_number || '');
+                }
+                updateCell('G3', report.summary || '의견 없음');
 
-                // 열 너비 조절 설정
-                ws['!cols'] = [
-                    { wch: 8 },  // 번호
-                    { wch: 30 }, // 대항목
-                    { wch: 60 }, // 평가 기준
-                    { wch: 25 }, // 평가 결과
-                    { wch: 35 }  // 평가 의견
-                ];
+                // 6. 각 평가 항목 결과값 매핑 (6행~137행 순회하며 G열 업데이트)
+                function cleanText(str) {
+                    if (!str) return '';
+                    return String(str).replace(/\s+/g, '').replace(/․/g, '.');
+                }
 
-                XLSX.utils.book_append_sheet(wb, ws, "평가결과");
+                for (let r = 6; r <= 137; r++) {
+                    const cellB = ws[`B${r}`];
+                    const cellC = ws[`C${r}`];
+                    const textB = cellB ? cleanText(cellB.v) : '';
+                    const textC = cellC ? cleanText(cellC.v) : '';
 
-                // 5. 엑셀 파일 다운로드 실행
+                    if (!textB && !textC) continue;
+
+                    // 이 행에 일치하는 DB 평가 문항 검색
+                    const matchedDetail = detailItems.find(dt => {
+                        const evalItem = itemMap[dt.orig_id] || {};
+                        const dbStandard = cleanText(evalItem.standard || dt.standard);
+                        if (!dbStandard) return false;
+                        
+                        return textB.includes(dbStandard) || dbStandard.includes(textB) ||
+                               textC.includes(dbStandard) || dbStandard.includes(textC);
+                    });
+
+                    if (matchedDetail) {
+                        let statusVal = matchedDetail.status;
+                        if (statusVal === null || statusVal === undefined) {
+                            statusVal = '';
+                        }
+                        updateCell(`G${r}`, statusVal);
+                    }
+                }
+
+                // 7. 심사 정보 업데이트 (A122: 심사기간, A123: 심사원)
+                const evalDate = new Date(report.created_at);
+                const dateStr = !isNaN(evalDate.getTime()) ? `${evalDate.getFullYear()}년 ${evalDate.getMonth() + 1}월 ${evalDate.getDate()}일` : '';
+                updateCell('A122', `인증심사기간 : ${dateStr}`);
+                updateCell('A123', `인증심사원 : ${getEvaluatorName(report.evaluator_id)}`);
+
+                // 8. 파일 다운로드 실행 (type: 'array'로 바이너리 그대로 출력하여 인코딩 손상 방지)
+                const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
                 const fileName = `${report.farms ? report.farms.name : '농장'}_평가결과_${new Date().toISOString().substring(0, 10)}.xlsx`;
-                XLSX.writeFile(wb, fileName);
+
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
 
             } catch (e) {
                 console.error('Error exporting to Excel:', e);
