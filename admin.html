@@ -2057,8 +2057,8 @@
                 const details = report.details || {};
                 const detailItems = Array.isArray(details) ? details : Object.keys(details).map(k => ({ orig_id: parseInt(k), ...details[k] }));
 
-                // 3. result.xlsx 템플릿 파일 비동기 로드
-                const response = await fetch('result.xlsx?_ts=' + Date.now());
+                // 3. origin_result.xlsx 템플릿 파일 비동기 로드
+                const response = await fetch('origin_result.xlsx?_ts=' + Date.now());
                 if (!response.ok) {
                     throw new Error('result.xlsx 템플릿 파일을 로드할 수 없습니다.');
                 }
