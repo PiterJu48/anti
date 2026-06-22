@@ -2163,13 +2163,19 @@
                     return String(str).replace(/\s+/g, '').replace(/․/g, '.');
                 }
 
+                // 설명 및 대헤더 행 번호 리스트 (값 업데이트 대상 제외)
+                const skipRows = [6, 16, 61, 99, 109];
+
                 for (let r = 6; r <= 137; r++) {
+                    if (skipRows.includes(r)) continue;
+
                     const cellBVal = getCellVal(`B${r}`);
                     const cellCVal = getCellVal(`C${r}`);
                     const textB = cellBVal ? cleanText(cellBVal) : '';
                     const textC = cellCVal ? cleanText(cellCVal) : '';
 
                     if (!textB && !textC) continue;
+                    if (textB.length < 5 && textC.length < 5) continue; // 헤더성 짧은 단어 행 방어
 
                     // 이 행에 일치하는 DB 평가 문항 검색
                     const matchedDetail = detailItems.find(dt => {
@@ -2177,8 +2183,8 @@
                         const dbStandard = cleanText(evalItem.standard || dt.standard);
                         if (!dbStandard) return false;
                         
-                        return textB.includes(dbStandard) || dbStandard.includes(textB) ||
-                               textC.includes(dbStandard) || dbStandard.includes(textC);
+                        // 단방향 및 포함관계 엄격 확인 (설명 행이나 엉뚱한 행 오매칭 차단)
+                        return textB.includes(dbStandard) || textC.includes(dbStandard);
                     });
 
                     if (matchedDetail) {
