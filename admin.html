@@ -2060,7 +2060,7 @@
                 // 3. origin_result.xlsx 템플릿 파일 비동기 로드
                 const response = await fetch('origin_result.xlsx?_ts=' + Date.now());
                 if (!response.ok) {
-                    throw new Error('result.xlsx 템플릿 파일을 로드할 수 없습니다.');
+                    throw new Error('origin_result.xlsx 템플릿 파일을 로드할 수 없습니다.');
                 }
                 const arrayBuffer = await response.arrayBuffer();
 
