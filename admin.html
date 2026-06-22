@@ -9,9 +9,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="auth.js"></script>
-    <!-- SheetJS 및 ExcelJS 라이브러리 추가 (Excel 내보내기 및 스타일 보존용) -->
+    <!-- Excel 내보내기용 라이브러리 (SheetJS, ExcelJS, JSZip) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -2029,7 +2030,7 @@
         setInterval(updateTime, 1000);
         updateTime();
 
-        // 평가 결과 엑셀 다운로드 기능 (ExcelJS를 사용하여 스타일 보존)
+        // 평가 결과 엑셀 다운로드 기능 (JSZip을 사용하여 원본 XML을 직접 수정하여 스타일 100% 손상 방지)
         async function exportToExcel(reportId) {
             try {
                 // 1. 해당 보고서 데이터 로드
@@ -2063,15 +2064,77 @@
                 }
                 const arrayBuffer = await response.arrayBuffer();
 
-                // 4. ExcelJS 워크북 로드
-                const workbook = new ExcelJS.Workbook();
-                await workbook.xlsx.load(arrayBuffer);
-                const ws = workbook.getWorksheet(1); // 첫 번째 시트 얻기
+                // 4. JSZip으로 엑셀 파일 로드 및 XML 파싱
+                const zip = new JSZip();
+                await zip.loadAsync(arrayBuffer);
+
+                // sharedStrings.xml 파싱
+                let sharedStrings = [];
+                const sstFile = zip.file("xl/sharedStrings.xml");
+                const parser = new DOMParser();
+                if (sstFile) {
+                    const sstXmlText = await sstFile.async("text");
+                    const sstDoc = parser.parseFromString(sstXmlText, "application/xml");
+                    const siNodes = sstDoc.querySelectorAll("si");
+                    siNodes.forEach(si => {
+                        const tElements = si.querySelectorAll("t");
+                        let text = "";
+                        tElements.forEach(t => { text += t.textContent; });
+                        sharedStrings.push(text);
+                    });
+                }
+
+                // sheet1.xml 파싱
+                const sheetFile = zip.file("xl/worksheets/sheet1.xml");
+                if (!sheetFile) {
+                    throw new Error("sheet1.xml 파일을 찾을 수 없습니다.");
+                }
+                const sheetXmlText = await sheetFile.async("text");
+                const xmlDoc = parser.parseFromString(sheetXmlText, "application/xml");
 
                 // 5. 셀 값 업데이트 헬퍼 함수 정의
                 function updateCell(cellAddress, val) {
-                    const cell = ws.getCell(cellAddress);
-                    cell.value = val;
+                    let cellNode = xmlDoc.querySelector(`c[r="${cellAddress}"]`);
+                    if (!cellNode) return; // 템플릿에 없는 셀이면 스킵
+                    
+                    // 기존 값 노드(<v> 또는 <is>) 제거
+                    while (cellNode.firstChild) {
+                        cellNode.removeChild(cellNode.firstChild);
+                    }
+
+                    // 값 세팅
+                    if (typeof val === 'number') {
+                        cellNode.setAttribute('t', 'n');
+                        const vNode = xmlDoc.createElementNS("http://schemas.openxmlformats.org/spreadsheetml/2006/main", 'v');
+                        vNode.textContent = val;
+                        cellNode.appendChild(vNode);
+                    } else {
+                        // 문자열은 inlineStr로 세팅하여 기존 shared string에 관계없이 삽입
+                        cellNode.setAttribute('t', 'inlineStr');
+                        const isNode = xmlDoc.createElementNS("http://schemas.openxmlformats.org/spreadsheetml/2006/main", 'is');
+                        const tNode = xmlDoc.createElementNS("http://schemas.openxmlformats.org/spreadsheetml/2006/main", 't');
+                        tNode.textContent = String(val);
+                        isNode.appendChild(tNode);
+                        cellNode.appendChild(isNode);
+                    }
+                }
+
+                // 셀 값 획득 헬퍼 함수 정의 (매핑 대조용)
+                function getCellVal(cellAddress) {
+                    const cellNode = xmlDoc.querySelector(`c[r="${cellAddress}"]`);
+                    if (!cellNode) return '';
+                    const tType = cellNode.getAttribute('t');
+                    const vNode = cellNode.querySelector('v');
+                    const rawVal = vNode ? vNode.textContent : '';
+                    
+                    if (tType === 's') {
+                        const idx = parseInt(rawVal);
+                        return sharedStrings[idx] || '';
+                    } else if (tType === 'inlineStr') {
+                        const tNode = cellNode.querySelector('is t');
+                        return tNode ? tNode.textContent : '';
+                    }
+                    return rawVal;
                 }
 
                 // 6. 3행에 농장 기본 정보 업데이트 (A3: 농장명, B3: 대표자명, C3: 주소, E3: 시설규모, F3: 전화번호, G3: 종합 의견)
@@ -2091,10 +2154,10 @@
                 }
 
                 for (let r = 6; r <= 137; r++) {
-                    const cellB = ws.getCell(`B${r}`).value;
-                    const cellC = ws.getCell(`C${r}`).value;
-                    const textB = cellB ? cleanText(cellB) : '';
-                    const textC = cellC ? cleanText(cellC) : '';
+                    const cellBVal = getCellVal(`B${r}`);
+                    const cellCVal = getCellVal(`C${r}`);
+                    const textB = cellBVal ? cleanText(cellBVal) : '';
+                    const textC = cellCVal ? cleanText(cellCVal) : '';
 
                     if (!textB && !textC) continue;
 
@@ -2123,13 +2186,17 @@
                 updateCell('A122', `인증심사기간 : ${dateStr}`);
                 updateCell('A123', `인증심사원 : ${getEvaluatorName(report.evaluator_id)}`);
 
-                // 9. 파일 다운로드 실행 (ExcelJS writeBuffer를 통한 손상 방지)
-                const buffer = await workbook.xlsx.writeBuffer();
-                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                // 9. 수정된 XML 데이터를 다시 zip 파일에 덮어씀
+                const serializer = new XMLSerializer();
+                const newSheetXmlText = serializer.serializeToString(xmlDoc);
+                zip.file("xl/worksheets/sheet1.xml", newSheetXmlText);
+
+                // 10. zip 파일 빌드 및 다운로드 실행
+                const content = await zip.generateAsync({ type: "blob" });
                 const fileName = `${report.farms ? report.farms.name : '농장'}_평가결과_${new Date().toISOString().substring(0, 10)}.xlsx`;
 
                 const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
+                link.href = URL.createObjectURL(content);
                 link.download = fileName;
                 document.body.appendChild(link);
                 link.click();
