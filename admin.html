@@ -619,7 +619,10 @@
             }, {});
 
             const container = document.getElementById('evalItemListContainer');
-            container.innerHTML = Object.keys(grouped).map(section => `
+            container.innerHTML = uniqueSections.map(section => {
+                const items = grouped[section] || [];
+                if (items.length === 0) return '';
+                return `
                 <div class="section-group" style="margin-bottom: 30px;">
                     <h4 style="background: #f8fafc; padding: 10px 15px; border-left: 4px solid var(--primary-color); margin-bottom: 10px;">${section}</h4>
                     <div class="table-responsive">
@@ -635,7 +638,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${grouped[section].map(item => `
+                                ${items.map(item => `
                                     <tr>
                                         <td style="font-weight: 500;">${item.large_item}</td>
                                         <td>${item.small_item || '-'}</td>
@@ -652,7 +655,7 @@
                         </table>
                     </div>
                 </div>
-            `).join('');
+            `;}).join('');
         }
 
         function openEvalItemModal() {
