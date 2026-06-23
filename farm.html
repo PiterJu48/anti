@@ -219,6 +219,9 @@
         const db = window.auth.supabase;
         let sectionChartInstance = null; // Chart.js 차트 인스턴스 전역 보관용
         let diagnosisItems = []; // 자가진단 평가 항목 보관용 전역 변수
+        let evaluationItems = [];      // 모든 평가 항목 원본 데이터
+        let largeItemGroups = [];      // 대항목으로 그룹화된 데이터
+        let currentGroupIndex = 0;     // 현재 표시 중인 대항목 그룹의 인덱스
 
         // 평가항목 정렬 함수 (표준 섹션 순서대로 정렬)
         function sortEvaluationItems(items) {
@@ -354,9 +357,18 @@
                 const evalItems = sortEvaluationItems(rawEvalItems);
 
                 // 3. 최근 진단내역 details 파싱
-                let details = latestReport.details || {};
-                if (typeof details === 'string') {
-                    try { details = JSON.parse(details); } catch (e) { details = {}; }
+                let rawDetails = latestReport.details || {};
+                if (typeof rawDetails === 'string') {
+                    try { rawDetails = JSON.parse(rawDetails); } catch (e) { rawDetails = {}; }
+                }
+
+                let details = {};
+                if (Array.isArray(rawDetails)) {
+                    rawDetails.forEach(d => {
+                        details[d.orig_id] = d.status;
+                    });
+                } else {
+                    details = rawDetails;
                 }
 
                 // 4. 섹션별 적합률 연산 및 취약 항목 추출
@@ -742,6 +754,36 @@
             showDiagnosisView('new');
         }
 
+        // 임시 저장 기능
+        function saveDraft() {
+            const userId = localStorage.getItem('user_id');
+            if (!userId) return;
+
+            const draftData = {
+                currentGroupIndex: currentGroupIndex,
+                overallSummaryValue: window.overallSummaryValue || "",
+                items: evaluationItems.map(item => ({
+                    id: item.id,
+                    eval_value: item.eval_value,
+                    eval_comment: item.eval_comment,
+                    eval_measurements: item.eval_measurements || [],
+                    eval_space_type: item.eval_space_type || null,
+                    eval_cow_conditions: item.eval_cow_conditions || null
+                }))
+            };
+
+            localStorage.setItem(`temp_diag_${userId}`, JSON.stringify(draftData));
+            alert('작성 중인 자가진단 항목이 임시 저장되었습니다.');
+        }
+
+        // 임시 저장 삭제 기능
+        function clearDraft() {
+            const userId = localStorage.getItem('user_id');
+            if (userId) {
+                localStorage.removeItem(`temp_diag_${userId}`);
+            }
+        }
+
         async function startDiagnosis() {
             document.getElementById('diagnosisIntroduction').style.display = 'none';
             document.getElementById('diagnosisContent').style.display = 'block';
@@ -752,114 +794,746 @@
             const sortedData = sortEvaluationItems(data);
             diagnosisItems = sortedData;
 
-            const container = document.getElementById('evalItemsContainer');
-            const grouped = sortedData.reduce((acc, item) => {
-                if (!acc[item.section]) acc[item.section] = [];
-                acc[item.section].push(item);
-                return acc;
-            }, {});
+            // 1. 메모리 데이터 초기화
+            evaluationItems = sortedData.map(item => ({
+                ...item,
+                eval_value: null,
+                eval_comment: "",
+                eval_measurements: item.small_item === '조명' ? ['', '', '', '', '', '', '', '', '', ''] : ['', '', '', '', ''],
+                eval_cow_conditions: item.section === '□ 소의 상태 평가' ? [
+                    { id: 1, values: {} },
+                    { id: 2, values: {} }
+                ] : null
+            }));
 
-            container.innerHTML = Object.keys(grouped).map(section => `
-                <div class="section-group" style="margin-bottom: 30px;">
-                    <h4 style="background: #f8fafc; padding: 12px 20px; border-left: 5px solid var(--primary-color); margin-bottom: 15px; font-size: 1.1rem;">${section}</h4>
-                    ${grouped[section].map(item => {
-                        const options = parseOptions(item.compliance_criteria);
-                        const hasParentheses = item.section && item.section.includes('(') && item.section.includes(')');
-                        return `
-                        <div class="card" style="margin-bottom: 15px; padding: 20px; border: 1px solid #edf2f7;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap;">
-                                <div style="flex: 1; min-width: 250px;">
-                                    <div style="font-weight: 700; color: #2d3748; margin-bottom: 5px;">${item.large_item} ${item.small_item ? '- ' + item.small_item : ''}</div>
-                                    <div style="font-size: 0.9rem; color: #4a5568; margin-bottom: 10px;">${item.standard}</div>
-                                </div>
-                                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 400px; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7;">
-                                    ${options.map(opt => `
-                                        <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #4a5568;">
-                                            <input type="radio" name="item_${item.id}" value="${opt.value}" required style="margin-top: 4px;"> 
-                                            <span>${opt.label}</span>
-                                        </label>
-                                    `).join('')}
-                                    ${hasParentheses ? `
-                                        <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #718096; font-weight: 500; border-top: 1px dashed #cbd5e0; padding-top: 8px; margin-top: 4px;">
-                                            <input type="radio" name="item_${item.id}" value="N/A" style="margin-top: 4px;"> 
-                                            <span>해당사항없음 (평가 생략)</span>
-                                        </label>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        </div>
-                        `;
-                    }).join('')}
-                </div>
-            `).join('');
+            // 임시 저장 불러오기 체크
+            const userId = localStorage.getItem('user_id');
+            const draftKey = `temp_diag_${userId}`;
+            const savedDraft = localStorage.getItem(draftKey);
+            
+            let loadedFromDraft = false;
+            if (savedDraft) {
+                if (confirm('임시 저장된 자가진단 내역이 있습니다. 불러오시겠습니까?')) {
+                    const draftData = JSON.parse(savedDraft);
+                    currentGroupIndex = draftData.currentGroupIndex || 0;
+                    window.overallSummaryValue = draftData.overallSummaryValue || "";
+                    
+                    draftData.items.forEach(dItem => {
+                        const match = evaluationItems.find(i => i.id === dItem.id);
+                        if (match) {
+                            match.eval_value = dItem.eval_value;
+                            match.eval_comment = dItem.eval_comment;
+                            if (dItem.eval_measurements) {
+                                match.eval_measurements = dItem.eval_measurements;
+                            }
+                            if (dItem.eval_space_type) {
+                                match.eval_space_type = dItem.eval_space_type;
+                            }
+                            if (dItem.eval_cow_conditions) {
+                                match.eval_cow_conditions = dItem.eval_cow_conditions;
+                            }
+                        }
+                    });
+                    loadedFromDraft = true;
+                }
+            }
+
+            // 2. 대항목(large_item) 기준으로 그룹 생성
+            largeItemGroups = [];
+            let currentGroup = null;
+
+            evaluationItems.forEach(item => {
+                if (item.section === '□ 소의 상태 평가') {
+                    let cowGroup = largeItemGroups.find(g => g.section === '□ 소의 상태 평가');
+                    if (!cowGroup) {
+                        cowGroup = {
+                            section: '□ 소의 상태 평가',
+                            largeItem: '소의 상태 평가',
+                            items: []
+                        };
+                        largeItemGroups.push(cowGroup);
+                    }
+                    cowGroup.items.push(item);
+                    currentGroup = null;
+                } else {
+                    if (!currentGroup || currentGroup.largeItem !== item.large_item || currentGroup.section !== item.section) {
+                        currentGroup = {
+                            section: item.section,
+                            largeItem: item.large_item,
+                            items: []
+                        };
+                        largeItemGroups.push(currentGroup);
+                    }
+                    currentGroup.items.push(item);
+                }
+            });
+
+            if (!loadedFromDraft) {
+                currentGroupIndex = 0;
+                window.overallSummaryValue = "";
+            }
+
+            renderCurrentGroup();
         }
 
-        async function calculateDiagnosis() {
+        // 현재 선택된 대항목 페이지를 렌더링
+        function renderCurrentGroup() {
             const container = document.getElementById('evalItemsContainer');
-            const radios = container.querySelectorAll('input[type="radio"]:checked');
-            const allItems = container.querySelectorAll('.card');
+            if (largeItemGroups.length === 0) return;
 
-            if (radios.length < allItems.length) {
-                alert('모든 항목에 대해 체크해 주세요.');
+            // 마지막 페이지: 종합 의견 작성 및 제출 화면
+            if (currentGroupIndex === largeItemGroups.length) {
+                const progressHtml = `
+                    <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 10px; font-weight: 500;">
+                        진행 상황: 완료 단계 (종합 평가 의견 작성)
+                    </div>
+                    <div style="width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; margin-bottom: 25px; overflow: hidden;">
+                        <div style="width: 100%; height: 100%; background: #2c7a7b; border-radius: 3px;"></div>
+                    </div>
+                `;
+
+                const summaryHtml = `
+                    <div class="card" style="background: #fffaf0; padding: 25px; border: 1px solid #fbd38d; margin-bottom: 25px;">
+                        <h4 style="color: #dd6b20; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                            <i class="fas fa-pen-nib"></i> 종합 평가 의견
+                        </h4>
+                        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">농장의 전반적인 동물복지 상태 및 개선 권고 사항에 대한 의견을 최종 작성해 주세요.</p>
+                        <textarea id="overallSummary" style="width: 100%; height: 150px; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.95rem; line-height: 1.5;" placeholder="의견을 서술식으로 작성하세요."></textarea>
+                    </div>
+                `;
+
+                const navigationHtml = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px;">
+                        <button class="logout-btn" style="padding: 12px 30px; font-weight: 500;" onclick="prevGroup()">
+                            <i class="fas fa-arrow-left"></i> 이전 대항목
+                        </button>
+                        <button class="btn-primary" style="padding: 12px 25px; background: #4a5568; font-weight: 500;" onclick="saveDraft()">
+                            <i class="fas fa-save"></i> 임시 저장
+                        </button>
+                        <button class="btn-primary" style="padding: 12px 40px; font-weight: 700; background: #2c7a7b;" onclick="calculateDiagnosis()">
+                            자가진단 결과 저장 및 보기 <i class="fas fa-check-double"></i>
+                        </button>
+                    </div>
+                `;
+
+                container.innerHTML = progressHtml + summaryHtml + navigationHtml;
+
+                const summaryTextarea = document.getElementById('overallSummary');
+                if (summaryTextarea && window.overallSummaryValue) {
+                    summaryTextarea.value = window.overallSummaryValue;
+                }
+
+                if (summaryTextarea) {
+                    summaryTextarea.addEventListener('input', (e) => {
+                        window.overallSummaryValue = e.target.value;
+                    });
+                }
                 return;
             }
 
-            let groupA_earned = 0;
-            let groupA_max = 0;
-            let groupB_earned = 0;
-            let groupB_max = 0;
+            // 대항목 평가 페이지
+            const group = largeItemGroups[currentGroupIndex];
+            
+            const progressHtml = `
+                <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 10px; font-weight: 500;">
+                    진행 상태: ${currentGroupIndex + 1} / ${largeItemGroups.length} 페이지
+                </div>
+                <div style="width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; margin-bottom: 25px; overflow: hidden;">
+                    <div style="width: ${((currentGroupIndex) / largeItemGroups.length) * 100}%; height: 100%; background: var(--primary-color); transition: width 0.3s;"></div>
+                </div>
+            `;
+
+            const itemsHtml = `
+                <div class="section-group" style="margin-bottom: 20px;">
+                    <h4 style="background: #f8fafc; padding: 12px 20px; border-left: 5px solid var(--primary-color); margin-bottom: 15px; font-size: 1.1rem;">
+                        ${group.section} &gt; ${group.largeItem}
+                    </h4>
+                    ${(() => {
+                        const isCowConditionSection = group.section === '□ 소의 상태 평가';
+                        if (isCowConditionSection) {
+                            const firstItem = group.items[0];
+                            if (!firstItem.eval_cow_conditions) {
+                                firstItem.eval_cow_conditions = [
+                                    { id: 1, values: {} },
+                                    { id: 2, values: {} }
+                                ];
+                            }
+                            const cowList = firstItem.eval_cow_conditions;
+
+                            return `
+                            <div class="card" style="margin-bottom: 20px; padding: 25px; border: 1px solid #edf2f7; background: #f7fafc;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px;">
+                                    <h5 style="font-size: 1rem; font-weight: 700; color: #2d3748;">
+                                        개체별 통합 순차 평가 (현재 등록 개체: ${cowList.length}개체, 최소 2개체 ~ 최대 20개체)
+                                    </h5>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button type="button" class="btn-primary" style="padding: 6px 14px; font-size: 0.85rem;" onclick="addCowEntity(${firstItem.id})">
+                                            <i class="fas fa-plus"></i> 개체 추가
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div id="cow_entity_container" style="display: flex; flex-direction: column; gap: 20px;">
+                                    ${cowList.map((cow, activeIdx) => {
+                                        const isCurrentCowFinished = group.items.every(item => cow.values && cow.values[item.id] !== undefined && cow.values[item.id] !== null && cow.values[item.id] !== '');
+                                        return `
+                                        <div class="card" style="background: #fff; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #edf2f7; padding-bottom: 8px;">
+                                                <strong style="color: #2c7a7b; font-size: 1.05rem;"><i class="fas fa-cow"></i> [개체 ${activeIdx + 1}]의 상태 항목 평가</strong>
+                                                <div style="display: flex; align-items: center; gap: 10px;">
+                                                    <span style="font-size: 0.8rem; color: ${isCurrentCowFinished ? '#2c7a7b' : '#e53e3e'}; font-weight: 600;">
+                                                        ${isCurrentCowFinished ? '<i class="fas fa-check-circle"></i> 평가 완료' : '<i class="fas fa-exclamation-circle"></i> 미완료 항목 존재'}
+                                                    </span>
+                                                    ${cowList.length > 2 ? `
+                                                        <button type="button" class="logout-btn" style="padding: 4px 10px; font-size: 0.75rem; background: #feb2b2; color: #9b2c2c; border: 1px solid #fed7d7; border-radius: 4px;" onclick="removeCowEntity(${firstItem.id}, ${activeIdx})">
+                                                            <i class="fas fa-trash-alt"></i> 삭제
+                                                        </button>
+                                                    ` : ''}
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 한 개체에 대한 모든 항목 일괄 평가 폼 -->
+                                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                                                ${group.items.map(item => {
+                                                    const options = parseOptions(item.compliance_criteria);
+                                                    const curVal = cow.values && cow.values[item.id] !== undefined ? cow.values[item.id] : '';
+                                                    return `
+                                                    <div style="display: flex; flex-direction: column; gap: 6px; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7;">
+                                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                            <span style="font-weight: 600; font-size: 0.9rem; color: #4a5568;">${item.small_item || item.large_item}</span>
+                                                            <button type="button" class="btn-primary" style="padding: 2px 8px; font-size: 0.7rem; background: #4a5568; opacity: 0.6; cursor: not-allowed;" onclick="alert('사진촬영 기능은 준비 중입니다.')">
+                                                                <i class="fas fa-camera"></i> 사진촬영/저장
+                                                            </button>
+                                                        </div>
+                                                        <select onchange="updateCowEntityVal(${firstItem.id}, ${activeIdx}, ${item.id}, this.value)" style="width: 100%; padding: 8px; font-size: 0.85rem; border: 1px solid #cbd5e0; border-radius: 4px; background: #fff;">
+                                                            <option value="">점수를 선택하세요</option>
+                                                            ${options.map(opt => `
+                                                                <option value="${opt.value}" ${String(curVal) === String(opt.value) ? 'selected' : ''}>${opt.label}</option>
+                                                            `).join('')}
+                                                        </select>
+                                                    </div>
+                                                    `;
+                                                }).join('')}
+                                            </div>
+                                        </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+
+                            <!-- 각 평가 항목의 평균값 자동 산출 및 적부 판단 요약 보드 -->
+                            <div class="card" style="background: #e6fffa; border: 1px solid #b2f5ea; padding: 20px; border-radius: 8px; margin-bottom: 15px;">
+                                <h5 style="color: #2c7a7b; font-weight: 700; font-size: 0.95rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-calculator"></i> 소의 상태 평가 자동 연산 및 환산 결과
+                                </h5>
+                                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.9rem; color: #2d3748;">
+                                    ${group.items.map(item => {
+                                        const values = cowList.map(c => c.values && c.values[item.id]).filter(v => v !== undefined && v !== '' && v !== null && !isNaN(parseFloat(v))).map(v => parseFloat(v));
+                                        const count = values.length;
+                                        const avgVal = count > 0 ? parseFloat((values.reduce((a, b) => a + b, 0) / count).toFixed(2)) : 0;
+                                        const finalVal = item.eval_value || '-';
+                                        return `
+                                            <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #b2f5ea; padding-bottom: 6px;">
+                                                <span>${item.small_item || item.large_item} (${count}개체 완료):</span>
+                                                <span>평균 <strong>${avgVal}점</strong> &rarr; 최종 환산: <strong>${finalVal}점</strong></span>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                            `;
+                        }
+
+                        // 일반 문항 렌더링
+                        return group.items.map(item => {
+                            const options = parseOptions(item.compliance_criteria);
+                            const hasParentheses = item.section && item.section.includes('(') && item.section.includes(')');
+                            const isSpecialItem = item.small_item === '조명' || item.small_item === '공기 오염도';
+                            return `
+                            <div class="card" style="margin-bottom: 15px; padding: 20px; border: 1px solid #edf2f7;">
+                                <div class="eval-item-row" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap;">
+                                    <div class="eval-item-left" style="flex: 1; min-width: 250px;">
+                                        <div style="font-weight: 700; color: #2d3748; margin-bottom: 5px;">${item.small_item || item.large_item}</div>
+                                        <div style="font-size: 0.9rem; color: #4a5568; margin-bottom: 10px;">${item.standard}</div>
+                                    </div>
+                                    <div class="eval-item-right" style="flex: 1; max-width: 450px;">
+                                        ${isSpecialItem ? `
+                                            <div style="margin-bottom: 15px; background: #f7fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                                                ${item.small_item === '조명' ? `
+                                                    <!-- 조명 전용 10개 입력 UI (일반공간 5개 + 휴식공간 5개) -->
+                                                    <div style="margin-bottom: 15px;">
+                                                        <div style="font-weight: 600; font-size: 0.85rem; color: #2c7a7b; margin-bottom: 6px;">
+                                                            일반공간 실측치 (100 이상 적합 / 100 미만 1개라도 있으면 부적합)
+                                                        </div>
+                                                        <div style="display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap;">
+                                                            ${[0, 1, 2, 3, 4].map(idx => {
+                                                                const val = (item.eval_measurements && item.eval_measurements[idx] !== undefined) ? item.eval_measurements[idx] : '';
+                                                                return `
+                                                                    <input type="number" step="any" placeholder="값 ${idx + 1}" 
+                                                                        value="${val}" 
+                                                                        oninput="updateMeasurement(${item.id}, ${idx}, this.value)" 
+                                                                        style="width: 18%; padding: 6px; font-size: 0.8rem; border: 1px solid #cbd5e0; border-radius: 4px; box-sizing: border-box; min-width: 60px;">
+                                                                `;
+                                                            }).join('')}
+                                                        </div>
+                                                        <div style="font-weight: 600; font-size: 0.85rem; color: #2c7a7b; margin-bottom: 6px;">
+                                                            휴식공간 실측치 (50 이하 적합 / 50 초과 1개라도 있으면 부적합)
+                                                        </div>
+                                                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                                            ${[5, 6, 7, 8, 9].map(idx => {
+                                                                const val = (item.eval_measurements && item.eval_measurements[idx] !== undefined) ? item.eval_measurements[idx] : '';
+                                                                return `
+                                                                    <input type="number" step="any" placeholder="값 ${idx - 4}" 
+                                                                        value="${val}" 
+                                                                        oninput="updateMeasurement(${item.id}, ${idx}, this.value)" 
+                                                                        style="width: 18%; padding: 6px; font-size: 0.8rem; border: 1px solid #cbd5e0; border-radius: 4px; box-sizing: border-box; min-width: 60px;">
+                                                                `;
+                                                            }).join('')}
+                                                        </div>
+                                                    </div>
+                                                ` : `
+                                                    <!-- 공기 오염도 전용 5개 입력 UI -->
+                                                    <div style="margin-bottom: 15px;">
+                                                        <div style="font-weight: 600; font-size: 0.85rem; color: #2c7a7b; margin-bottom: 6px;">
+                                                            암모니아 가스 농도 측정치 (평균 25 ppm 이하 적합)
+                                                        </div>
+                                                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                                            ${[0, 1, 2, 3, 4].map(idx => {
+                                                                const val = (item.eval_measurements && item.eval_measurements[idx] !== undefined) ? item.eval_measurements[idx] : '';
+                                                                return `
+                                                                    <input type="number" step="any" placeholder="값 ${idx + 1}" 
+                                                                        value="${val}" 
+                                                                        oninput="updateMeasurement(${item.id}, ${idx}, this.value)" 
+                                                                        style="width: 18%; padding: 6px; font-size: 0.8rem; border: 1px solid #cbd5e0; border-radius: 4px; box-sizing: border-box; min-width: 60px;">
+                                                                `;
+                                                            }).join('')}
+                                                        </div>
+                                                    </div>
+                                                `}
+                                                <div id="calc_result_${item.id}" style="font-size: 0.85rem; font-weight: 600; color: #4a5568; margin-top: 10px; padding-top: 10px; border-top: 1px solid #edf2f7;">
+                                                    ${calculateSpecialResultText(item)}
+                                                </div>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        <div style="display: flex; flex-direction: column; gap: 8px; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; margin-bottom: 10px;">
+                                            ${options.map(opt => `
+                                                <label style="cursor: ${isSpecialItem ? 'default' : 'pointer'}; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #4a5568;">
+                                                    <input type="radio" name="item_${item.id}" value="${opt.value}" required 
+                                                        ${item.eval_value === opt.value ? 'checked' : ''} 
+                                                        ${isSpecialItem ? 'disabled' : ''}
+                                                        onchange="saveItemValue(${item.id}, '${opt.value}')" style="margin-top: 4px;"> 
+                                                    <span>${opt.label}</span>
+                                                </label>
+                                            `).join('')}
+                                            ${hasParentheses && !isSpecialItem ? `
+                                                <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #718096; font-weight: 500; border-top: 1px dashed #e2e8f0; padding-top: 8px; margin-top: 4px;">
+                                                    <input type="radio" name="item_${item.id}" value="N/A" 
+                                                        ${item.eval_value === 'N/A' || item.eval_value === null ? 'checked' : ''} 
+                                                        onchange="saveItemValue(${item.id}, 'N/A')" style="margin-top: 4px;"> 
+                                                    <span>해당사항없음 (평가 생략)</span>
+                                                </label>
+                                            ` : ''}
+                                        </div>
+                                        <input type="text" id="comm_${item.id}" placeholder="평가 의견 입력" 
+                                            value="${item.eval_comment || ''}" 
+                                            ${isSpecialItem ? 'readonly style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem; border-radius: 4px; background: #f1f5f9; color: #4a5568; box-sizing: border-box;"' : 'style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem; border-radius: 4px; box-sizing: border-box;"'}
+                                            oninput="saveItemComment(${item.id}, this.value)">
+                                    </div>
+                                </div>
+                            </div>
+                            `;
+                        }).join('');
+                    })()}
+                </div>
+            `;
+
+            const navigationHtml = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px;">
+                    <div>
+                        ${currentGroupIndex > 0 ? `
+                            <button class="logout-btn" style="padding: 12px 30px; font-weight: 500;" onclick="prevGroup()">
+                                <i class="fas fa-arrow-left"></i> 이전 대항목
+                            </button>
+                        ` : ''}
+                    </div>
+                    <div>
+                        <button class="btn-primary" style="padding: 12px 25px; background: #4a5568; font-weight: 500;" onclick="saveDraft()">
+                            <i class="fas fa-save"></i> 임시 저장
+                        </button>
+                    </div>
+                    <div>
+                        <button class="btn-primary" style="padding: 12px 40px; font-weight: 500;" onclick="nextGroup()">
+                            다음 <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = progressHtml + itemsHtml + navigationHtml;
+        }
+
+        // 측정값 업데이트 및 실시간 연산/적부 판단 기능
+        function updateMeasurement(id, index, val) {
+            const item = evaluationItems.find(i => i.id === id);
+            if (!item) return;
+
+            if (!item.eval_measurements) {
+                item.eval_measurements = ['', '', '', '', ''];
+            }
+            item.eval_measurements[index] = val === '' ? '' : parseFloat(val);
+
+            // 실시간 연산 및 자동 적부 판정 적용
+            calculateSpecialItem(item);
+
+            // 결과 텍스트 업데이트
+            const resultEl = document.getElementById(`calc_result_${id}`);
+            if (resultEl) {
+                resultEl.innerHTML = calculateSpecialResultText(item);
+            }
+
+            // UI의 라디오 버튼 동적 체크 업데이트
+            const radios = document.getElementsByName(`item_${id}`);
+            radios.forEach(radio => {
+                if (radio.value === item.eval_value) {
+                    radio.checked = true;
+                } else {
+                    radio.checked = false;
+                }
+            });
+
+            // UI의 의견란 자동 입력 업데이트
+            const commEl = document.getElementById(`comm_${id}`);
+            if (commEl) {
+                commEl.value = item.eval_comment;
+            }
+        }
+
+        // 측정결과 계산 텍스트 생성
+        function calculateSpecialResultText(item) {
+            if (item.small_item === '조명') {
+                const listGeneral = (item.eval_measurements || []).slice(0, 5).filter(v => v !== '' && !isNaN(v)).map(v => parseFloat(v));
+                const listRest = (item.eval_measurements || []).slice(5, 10).filter(v => v !== '' && !isNaN(v)).map(v => parseFloat(v));
+                const totalCount = listGeneral.length + listRest.length;
+                
+                if (totalCount < 2) {
+                    return `<span style="color: #e53e3e;"><i class="fas fa-info-circle"></i> 일반/휴식공간 측정값 합산 최소 2개 이상 입력하세요. (현재: ${totalCount}개 입력됨)</span>`;
+                }
+                
+                const status = item.eval_value;
+                const statusText = status === 'Y' ? '<strong style="color: #2c7a7b;">적합(Y)</strong>' : '<strong style="color: #e53e3e;">부적합(N)</strong>';
+                
+                return `일반공간 측정: <strong>${listGeneral.length}개</strong>, 휴식공간 측정: <strong>${listRest.length}개</strong> &rarr; 판정: ${statusText}`;
+            } else {
+                const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
+                if (list.length < 2) {
+                    return `<span style="color: #e53e3e;"><i class="fas fa-info-circle"></i> 최소 2개 이상의 값을 입력하세요. (현재: ${list.length}개 입력됨)</span>`;
+                }
+                const minVal = Math.min(...list);
+                const sum = list.reduce((a, b) => a + b, 0);
+                const avgVal = parseFloat((sum / list.length).toFixed(2));
+                const status = item.eval_value;
+                const statusText = status === 'Y' ? '<strong style="color: #2c7a7b;">적합(Y)</strong>' : '<strong style="color: #e53e3e;">부적합(N)</strong>';
+                return `평균값: <strong>${avgVal}</strong>, 최소값: <strong>${minVal}</strong> &rarr; 판정: ${statusText}`;
+            }
+        }
+
+        // 조명/공기오염도 자동 적부 연산 로직
+        function calculateSpecialItem(item) {
+            if (item.small_item === '조명') {
+                const listGeneral = (item.eval_measurements || []).slice(0, 5).filter(v => v !== '' && !isNaN(v)).map(v => parseFloat(v));
+                const listRest = (item.eval_measurements || []).slice(5, 10).filter(v => v !== '' && !isNaN(v)).map(v => parseFloat(v));
+                const totalCount = listGeneral.length + listRest.length;
+                
+                if (totalCount < 2) {
+                    item.eval_value = null;
+                    item.eval_comment = "측정값이 부족합니다. (일반/휴식공간 합산 최소 2개 필수)";
+                    return;
+                }
+
+                let judgment = 'Y';
+                let reason = [];
+
+                const hasGeneralBelow100 = listGeneral.some(v => v < 100);
+                if (hasGeneralBelow100) {
+                    judgment = 'N';
+                    reason.push("일반공간 100 lux 미만 존재");
+                }
+
+                const hasRestAbove50 = listRest.some(v => v > 50);
+                if (hasRestAbove50) {
+                    judgment = 'N';
+                    reason.push("휴식공간 50 lux 초과 존재");
+                }
+
+                item.eval_value = judgment;
+                
+                const reasonText = reason.length > 0 ? ` (${reason.join(', ')})` : '';
+                item.eval_comment = `[자동 판정] 일반공간: [${listGeneral.join(', ')}], 휴식공간: [${listRest.join(', ')}]${reasonText}`;
+                
+            } else if (item.small_item === '공기 오염도') {
+                const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
+                if (list.length < 2) {
+                    item.eval_value = null;
+                    item.eval_comment = "측정값이 부족합니다. (최소 2개 필수)";
+                    return;
+                }
+
+                const minVal = Math.min(...list);
+                const sum = list.reduce((a, b) => a + b, 0);
+                const avgVal = parseFloat((sum / list.length).toFixed(2));
+
+                let judgment = 'N';
+                if (avgVal <= 25) {
+                    judgment = 'Y';
+                } else {
+                    judgment = 'N';
+                }
+                item.eval_value = judgment;
+                item.eval_comment = `[자동 판정] 측정값: [${list.join(', ')}], 평균: ${avgVal} ppm, 최소: ${minVal} ppm (기준: 평균 25 ppm 이하 시 적합)`;
+            }
+        }
+
+        // 개체 추가
+        function addCowEntity(firstItemId) {
+            const firstItem = evaluationItems.find(i => i.id === firstItemId);
+            if (!firstItem) return;
+
+            if (!firstItem.eval_cow_conditions) {
+                firstItem.eval_cow_conditions = [
+                    { id: 1, values: {} },
+                    { id: 2, values: {} }
+                ];
+            }
+
+            const cowList = firstItem.eval_cow_conditions;
+            if (cowList.length >= 20) {
+                alert('평가는 최대 20개체까지만 반복 수행할 수 있습니다.');
+                return;
+            }
+
+            const newId = cowList.length > 0 ? Math.max(...cowList.map(c => c.id)) + 1 : 1;
+            cowList.push({ id: newId, values: {} });
+
+            renderCurrentGroup();
+        }
+
+        // 개체 삭제
+        function removeCowEntity(firstItemId, index) {
+            const firstItem = evaluationItems.find(i => i.id === firstItemId);
+            if (!firstItem) return;
+
+            const cowList = firstItem.eval_cow_conditions;
+            if (cowList.length <= 2) {
+                alert('최소 2개체 이상 평가를 수행해야 하므로 더 이상 삭제할 수 없습니다.');
+                return;
+            }
+
+            cowList.splice(index, 1);
+
+            calculateCowSectionItems(firstItemId);
+            renderCurrentGroup();
+        }
+
+        // 특정 개체의 특정 항목 점수 업데이트
+        function updateCowEntityVal(firstItemId, cowIdx, itemId, val) {
+            const firstItem = evaluationItems.find(i => i.id === firstItemId);
+            if (!firstItem) return;
+
+            const cowList = firstItem.eval_cow_conditions;
+            if (!cowList[cowIdx].values) {
+                cowList[cowIdx].values = {};
+            }
+            cowList[cowIdx].values[itemId] = val === '' ? null : parseFloat(val);
+
+            calculateCowSectionItems(firstItemId);
+            renderCurrentGroup();
+        }
+
+        // 소의 상태 평가 평균 및 환산 연산
+        function calculateCowSectionItems(firstItemId) {
+            const firstItem = evaluationItems.find(i => i.id === firstItemId);
+            if (!firstItem) return;
+
+            const group = largeItemGroups.find(g => g.section === '□ 소의 상태 평가');
+            if (!group) return;
+
+            const cowList = firstItem.eval_cow_conditions || [];
+
+            group.items.forEach(item => {
+                const validVals = cowList.map(c => c.values && c.values[item.id]).filter(v => v !== undefined && v !== null && !isNaN(v));
+                
+                if (validVals.length < 2) {
+                    item.eval_value = null;
+                    item.eval_comment = "평가 개체수가 부족합니다. (최소 2개체 필수)";
+                    return;
+                }
+
+                const sum = validVals.reduce((a, b) => a + b, 0);
+                const avgVal = parseFloat((sum / validVals.length).toFixed(2));
+
+                const options = parseOptions(item.compliance_criteria);
+                const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+
+                let closestVal = null;
+                let minDiff = Infinity;
+                
+                numericValues.forEach(val => {
+                    const diff = Math.abs(val - avgVal);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestVal = val;
+                    }
+                });
+
+                item.eval_value = closestVal !== null ? String(closestVal) : null;
+                item.eval_comment = `[자동 판정] 평가 개체수: ${validVals.length}개체, 평균 점수: ${avgVal}점 (가장 가까운 기준값인 ${closestVal}점으로 자동 환산)`;
+            });
+        }
+
+        // 라디오 버튼 선택 시 메모리 업데이트
+        function saveItemValue(id, value) {
+            const item = evaluationItems.find(i => i.id === id);
+            if (item) {
+                item.eval_value = value;
+            }
+        }
+
+        // 평가의견 작성 시 메모리 업데이트
+        function saveItemComment(id, comment) {
+            const item = evaluationItems.find(i => i.id === id);
+            if (item) {
+                item.eval_comment = comment;
+            }
+        }
+
+        // 이전 페이지로 이동
+        function prevGroup() {
+            if (currentGroupIndex > 0) {
+                currentGroupIndex--;
+                renderCurrentGroup();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        // 다음 페이지로 이동 (검증 포함)
+        function nextGroup() {
+            const group = largeItemGroups[currentGroupIndex];
+            
+            for (const item of group.items) {
+                if (item.small_item === '조명' || item.small_item === '공기 오염도') {
+                    const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
+                    if (list.length < 2) {
+                        alert(`'${item.small_item}' 평가는 최소 2개 이상의 측정값을 입력해야 합니다.`);
+                        return;
+                    }
+                }
+                if (item.section === '□ 소의 상태 평가') {
+                    const firstItem = group.items[0];
+                    const cowList = firstItem ? (firstItem.eval_cow_conditions || []) : [];
+                    if (cowList.length < 2) {
+                        alert(`'소의 상태 평가'는 최소 2개체 이상 평가해야 합니다.`);
+                        return;
+                    }
+                    const invalidCows = cowList.filter(c => !c.values || c.values[item.id] === undefined || c.values[item.id] === null || c.values[item.id] === '');
+                    if (invalidCows.length > 0) {
+                        alert(`'소의 상태 평가'의 '${item.small_item || item.large_item}' 항목은 모든 개체에 대해 점수가 선택되어야 합니다.`);
+                        return;
+                    }
+                }
+            }
+
+            const uncompleted = group.items.filter(i => {
+                const isOptional = (i.section && i.section.includes('(추가 사항)')) || (i.large_item && i.large_item.includes('(추가 사항)'));
+                return i.eval_value === null && !isOptional;
+            });
+
+            if (uncompleted.length > 0) {
+                alert('현재 대항목의 필수 평가 항목을 모두 입력해 주세요.');
+                return;
+            }
+
+            if (currentGroupIndex < largeItemGroups.length) {
+                currentGroupIndex++;
+                renderCurrentGroup();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        async function calculateDiagnosis() {
+            const userId = localStorage.getItem('user_id');
+
+            // 특수 문항 측정값 개수 최종 재검증
+            for (const item of evaluationItems) {
+                if (item.small_item === '조명' || item.small_item === '공기 오염도') {
+                    const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
+                    if (list.length < 2) {
+                        alert(`'${item.small_item}' 평가는 최소 2개 이상의 측정값을 입력해야 합니다.`);
+                        return;
+                    }
+                }
+                if (item.section === '□ 소의 상태 평가') {
+                    const firstItem = evaluationItems.find(i => i.section === '□ 소의 상태 평가');
+                    const cowList = firstItem ? (firstItem.eval_cow_conditions || []) : [];
+                    if (cowList.length < 2) {
+                        alert(`'소의 상태 평가'는 최소 2개체 이상 평가해야 합니다.`);
+                        return;
+                    }
+                    const invalidCows = cowList.filter(c => !c.values || c.values[item.id] === undefined || c.values[item.id] === null || c.values[item.id] === '');
+                    if (invalidCows.length > 0) {
+                        alert(`'소의 상태 평가'의 '${item.small_item || item.large_item}' 항목은 모든 개체에 대해 점수가 선택되어야 합니다.`);
+                        return;
+                    }
+                }
+            }
+
+            // 미해결 문항 재검증
+            const uncompletedItems = evaluationItems.filter(i => {
+                const isOptional = (i.section && i.section.includes('(추가 사항)')) || (i.large_item && i.large_item.includes('(추가 사항)'));
+                return i.eval_value === null && !isOptional;
+            });
+            if (uncompletedItems.length > 0) {
+                const uncompletedNames = [...new Set(uncompletedItems.map(i => i.large_item))];
+                alert(`아직 평가되지 않은 필수 문항이 존재합니다.\n대항목: ${uncompletedNames.join(', ')}`);
+                return;
+            }
 
             let earnedPoints = 0;
             let maxPoints = 0;
             let compliantCount = 0;
             let nonCompliantCount = 0;
-            let details = {};
+            let details = [];
 
-            diagnosisItems.forEach(item => {
-                const radio = container.querySelector(`input[name="item_${item.id}"]:checked`);
-                const val = radio ? radio.value : null;
+            evaluationItems.forEach(item => {
+                details.push({
+                    orig_id: item.id,
+                    section: item.section || '',
+                    large_item: item.large_item || '',
+                    small_item: item.small_item || '',
+                    standard: item.standard || '',
+                    compliance_criteria: item.compliance_criteria || '',
+                    status: item.eval_value,
+                    comment: item.eval_comment || '',
+                    measurements: item.eval_measurements || [],
+                    space_type: item.eval_space_type || null,
+                    cow_conditions: item.section === '□ 소의 상태 평가' ? (evaluationItems.find(i => i.section === '□ 소의 상태 평가').eval_cow_conditions || null) : null
+                });
 
-                // N/A 항목은 채점에서 제외
-                if (val === null || val === 'N/A') {
-                    details[item.id] = 'N/A';
+                if (item.eval_value === null || item.eval_value === 'N/A') {
                     return;
                 }
-                
-                details[item.id] = val;
 
                 const options = parseOptions(item.compliance_criteria);
                 const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
 
-                const isGroupA = [
-                    '□ 일반기준',
-                    '□ 사양관리 방법',
-                    '□ 사육시설 및 환경',
-                    '□ 동물복지형 자유방목(추가 사항)'
-                ].includes(item.section);
-
-                const isGroupB = (item.section === '□ 소의 상태 평가');
-
-                let earnedVal = 0;
-                let maxVal = 0;
-
                 if (numericValues.length > 0) {
-                    // 점수형 문항
-                    maxVal = Math.max(...numericValues);
-                    earnedVal = parseFloat(val);
+                    const maxVal = Math.max(...numericValues);
+                    let earnedVal = parseFloat(item.eval_value);
                     if (isNaN(earnedVal)) {
                         earnedVal = 0;
                     }
-                    
                     earnedPoints += earnedVal;
                     maxPoints += maxVal;
-
-                    if (isGroupA) {
-                        groupA_earned += earnedVal;
-                        groupA_max += maxVal;
-                    } else if (isGroupB) {
-                        groupB_earned += earnedVal;
-                        groupB_max += maxVal;
-                    }
 
                     if (earnedVal === maxVal) {
                         compliantCount++;
@@ -867,31 +1541,18 @@
                         nonCompliantCount++;
                     }
                 } else {
-                    // 적부(Y/N)형 문항
-                    maxVal = 1;
-                    earnedVal = (val === 'Y') ? 1 : 0;
-
-                    earnedPoints += earnedVal;
-                    maxPoints += maxVal;
-
-                    if (isGroupA) {
-                        groupA_earned += earnedVal;
-                        groupA_max += maxVal;
-                    } else if (isGroupB) {
-                        groupB_earned += earnedVal;
-                        groupB_max += maxVal;
-                    }
-
-                    if (val === 'Y') {
+                    if (item.eval_value === 'Y') {
+                        earnedPoints += 1;
+                        maxPoints += 1;
                         compliantCount++;
-                    } else {
+                    } else if (item.eval_value === 'N') {
+                        maxPoints += 1;
                         nonCompliantCount++;
                     }
                 }
             });
 
             const score = maxPoints > 0 ? Math.round((earnedPoints / maxPoints) * 100) : 0;
-            const userId = localStorage.getItem('user_id');
 
             // Supabase에 결과 저장
             const { error } = await db.from('diagnosis_results').insert({
@@ -908,8 +1569,15 @@
                 return;
             }
             
-            // 진단 완료 시 진단 결과 탭으로 이동하여 차트와 상세 요약 출력
             alert('자가진단이 저장되었습니다. 진단결과 리포트로 이동합니다.');
+            clearDraft();
+
+            // 데이터 초기화
+            window.overallSummaryValue = "";
+            evaluationItems = [];
+            largeItemGroups = [];
+            currentGroupIndex = 0;
+
             showTab('result');
         }
     </script>
