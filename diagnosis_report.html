@@ -263,30 +263,13 @@
             return options;
         }
 
-        // 평가항목 정렬 함수 (표준 섹션 순서대로 정렬)
+        // 평가항목 정렬 함수 (고유 정렬 번호 순서대로 정렬)
         function sortEvaluationItems(items) {
-            const SECTION_ORDER = [
-                "□ 일반기준",
-                "□ 사양관리 방법",
-                "□ 사육시설 및 환경",
-                "□ 소의 상태 평가",
-                "□ 동물복지형 자유방목(추가 사항)",
-                "□ 동물복지형 자유방목 (추가사항)"
-            ];
-            
             return [...items].sort((a, b) => {
-                const sectA = a.section || "";
-                const sectB = b.section || "";
-                
-                const cleanSect = s => s.trim().replace(/\s+/g, '');
-                const idxA = SECTION_ORDER.findIndex(sec => cleanSect(sectA) === cleanSect(sec));
-                const idxB = SECTION_ORDER.findIndex(sec => cleanSect(sectB) === cleanSect(sec));
-                
-                const valA = idxA === -1 ? 99 : idxA;
-                const valB = idxB === -1 ? 99 : idxB;
-                
-                if (valA !== valB) {
-                    return valA - valB;
+                const orderA = a.sort_order !== undefined && a.sort_order !== null ? a.sort_order : 999999;
+                const orderB = b.sort_order !== undefined && b.sort_order !== null ? b.sort_order : 999999;
+                if (orderA !== orderB) {
+                    return orderA - orderB;
                 }
                 return a.id - b.id;
             });
@@ -387,7 +370,18 @@
 
             // 4. 상세 내역 매핑을 위해 평가항목 다시 로드
             const { data: rawItems } = await db.from('evaluation_items').select('id, large_item, small_item, standard, compliance_criteria, section').order('id', { ascending: true });
-            const items = sortEvaluationItems(rawItems);
+            
+            // 섹션 설정 로드 및 비활성 필터링
+            const { data: configs, error: configError } = await db.from('section_configs').select('*');
+            const inactiveKeywords = configError ? [] : configs.filter(c => !c.is_active).map(c => c.section_name);
+            const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
+
+            const filteredItems = rawItems.filter(item => {
+                const itemSectClean = cleanSect(item.section || "");
+                return !inactiveKeywords.some(keyword => itemSectClean.includes(keyword));
+            });
+
+            const items = sortEvaluationItems(filteredItems);
             
             const itemMap = items.reduce((acc, item) => {
                 acc[item.id] = item;

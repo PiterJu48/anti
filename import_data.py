@@ -6,7 +6,7 @@ import urllib.request
 URL = "https://worigkqyaitfhxrlqrww.supabase.co/rest/v1/evaluation_items"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indvcmlna3F5YWl0Zmh4cmxxcnd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNzk2OTIsImV4cCI6MjA5MTk1NTY5Mn0.QMXM0wKxkEJAI6j5uqwe20wyWwvEHO2HEL8iTr9wKto"
 
-CSV_FILE = "d:/works/anti/mafra_f.csv"
+CSV_FILE = "d:/works/anti/eval_final.csv"
 
 def import_data():
     items = []
@@ -93,7 +93,8 @@ def import_data():
                     "standard": standard,
                     "compliance_criteria": compliance,
                     "result": result,
-                    "eval_method": eval_method
+                    "eval_method": eval_method,
+                    "sort_order": len(items) + 1
                 })
             except IndexError:
                 continue

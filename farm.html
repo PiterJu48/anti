@@ -223,46 +223,14 @@
         let largeItemGroups = [];      // 대항목으로 그룹화된 데이터
         let currentGroupIndex = 0;     // 현재 표시 중인 대항목 그룹의 인덱스
 
-        // 평가항목 정렬 함수 (표준 섹션 순서대로 정렬)
+        // 평가항목 정렬 함수 (고유 정렬 번호 순서대로 정렬)
         function sortEvaluationItems(items) {
-            const KEYWORDS = [
-                "일반기준",
-                "사양관리",
-                "사육시설",
-                "소의상태",
-                "자유방목"
-            ];
-            
             return [...items].sort((a, b) => {
-                const sectA = a.section || "";
-                const sectB = b.section || "";
-                
-                const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
-                const cleanA = cleanSect(sectA);
-                const cleanB = cleanSect(sectB);
-                
-                const idxA = KEYWORDS.findIndex(key => cleanA.includes(key));
-                const idxB = KEYWORDS.findIndex(key => cleanB.includes(key));
-                
-                const valA = idxA === -1 ? 99 : idxA;
-                const valB = idxB === -1 ? 99 : idxB;
-                
-                if (valA !== valB) {
-                    return valA - valB;
+                const orderA = a.sort_order !== undefined && a.sort_order !== null ? a.sort_order : 999999;
+                const orderB = b.sort_order !== undefined && b.sort_order !== null ? b.sort_order : 999999;
+                if (orderA !== orderB) {
+                    return orderA - orderB;
                 }
-                
-                const largeA = a.large_item || "";
-                const largeB = b.large_item || "";
-                if (largeA !== largeB) {
-                    return largeA.localeCompare(largeB, 'ko');
-                }
-                
-                const smallA = a.small_item || "";
-                const smallB = b.small_item || "";
-                if (smallA !== smallB) {
-                    return smallA.localeCompare(smallB, 'ko');
-                }
-                
                 return a.id - b.id;
             });
         }
@@ -368,8 +336,18 @@
                     .order('id', { ascending: true });
 
                 if (itemsError) throw itemsError;
+
+                // 섹션 설정 로드 및 비활성 필터링
+                const { data: configs, error: configError } = await db.from('section_configs').select('*');
+                const inactiveKeywords = configError ? [] : configs.filter(c => !c.is_active).map(c => c.section_name);
+                const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
+
+                const filteredEvalItems = rawEvalItems.filter(item => {
+                    const itemSectClean = cleanSect(item.section || "");
+                    return !inactiveKeywords.some(keyword => itemSectClean.includes(keyword));
+                });
                 
-                const evalItems = sortEvaluationItems(rawEvalItems);
+                const evalItems = sortEvaluationItems(filteredEvalItems);
 
                 // 3. 최근 진단내역 details 파싱
                 let rawDetails = latestReport.details || {};
@@ -806,7 +784,17 @@
             const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
             if (error) return alert('평가항목을 불러오는 데 실패했습니다.');
             
-            const sortedData = sortEvaluationItems(data);
+            // 섹션 설정 로드 및 비활성 필터링
+            const { data: configs, error: configError } = await db.from('section_configs').select('*');
+            const inactiveKeywords = configError ? [] : configs.filter(c => !c.is_active).map(c => c.section_name);
+            const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
+
+            const filteredData = data.filter(item => {
+                const itemSectClean = cleanSect(item.section || "");
+                return !inactiveKeywords.some(keyword => itemSectClean.includes(keyword));
+            });
+
+            const sortedData = sortEvaluationItems(filteredData);
             diagnosisItems = sortedData;
 
             // 1. 메모리 데이터 초기화

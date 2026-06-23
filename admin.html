@@ -283,6 +283,13 @@
                             <input type="file" id="evalItemFileInput" style="display: none;" accept=".csv" onchange="handleFileUpload(event)">
                         </div>
                     </div>
+                    <!-- 섹션 활성화 설정 영역 -->
+                    <div id="sectionConfigArea" style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+                        <h4 style="margin-bottom: 10px; font-size: 0.95rem; color: #4a5568;"><i class="fas fa-toggle-on"></i> 평가 섹션 활성화 설정 (비활성화 시 모든 평가 화면 및 보고서에서 제외)</h4>
+                        <div id="sectionToggles" style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <span style="color: #718096; font-size: 0.9rem;">설정을 로드하는 중...</span>
+                        </div>
+                    </div>
                     <div id="evalItemListContainer">
                         <!-- 섹션별 그룹화된 테이블이 여기에 동적으로 생성됨 -->
                     </div>
@@ -565,52 +572,58 @@
             if (tabName === 'results') fetchResults();
         }
 
-        // 평가항목 정렬 함수 (표준 섹션 순서대로 정렬)
+        // 평가항목 정렬 함수 (고유 정렬 번호 순서대로 정렬)
         function sortEvaluationItems(items) {
-            const KEYWORDS = [
-                "일반기준",
-                "사양관리",
-                "사육시설",
-                "소의상태",
-                "자유방목"
-            ];
-            
             return [...items].sort((a, b) => {
-                const sectA = a.section || "";
-                const sectB = b.section || "";
-                
-                const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
-                const cleanA = cleanSect(sectA);
-                const cleanB = cleanSect(sectB);
-                
-                const idxA = KEYWORDS.findIndex(key => cleanA.includes(key));
-                const idxB = KEYWORDS.findIndex(key => cleanB.includes(key));
-                
-                const valA = idxA === -1 ? 99 : idxA;
-                const valB = idxB === -1 ? 99 : idxB;
-                
-                if (valA !== valB) {
-                    return valA - valB;
+                const orderA = a.sort_order !== undefined && a.sort_order !== null ? a.sort_order : 999999;
+                const orderB = b.sort_order !== undefined && b.sort_order !== null ? b.sort_order : 999999;
+                if (orderA !== orderB) {
+                    return orderA - orderB;
                 }
-                
-                const largeA = a.large_item || "";
-                const largeB = b.large_item || "";
-                if (largeA !== largeB) {
-                    return largeA.localeCompare(largeB, 'ko');
-                }
-                
-                const smallA = a.small_item || "";
-                const smallB = b.small_item || "";
-                if (smallA !== smallB) {
-                    return smallA.localeCompare(smallB, 'ko');
-                }
-                
                 return a.id - b.id;
             });
         }
 
+        let sectionConfigs = [];
+
+        async function fetchSectionConfigs() {
+            const { data, error } = await db.from('section_configs').select('*').order('id', { ascending: true });
+            if (error) {
+                console.error("section_configs 로드 에러:", error);
+                return [];
+            }
+            sectionConfigs = data;
+            renderSectionToggles();
+            return data;
+        }
+
+        function renderSectionToggles() {
+            const container = document.getElementById('sectionToggles');
+            if (!container) return;
+            container.innerHTML = sectionConfigs.map(config => `
+                <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; font-weight: 500; cursor: pointer; background: white; padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    <input type="checkbox" ${config.is_active ? 'checked' : ''} onchange="toggleSectionActive('${config.section_name}', this.checked)" style="width: 16px; height: 16px; cursor: pointer;">
+                    ${config.section_name}
+                </label>
+            `).join('');
+        }
+
+        async function toggleSectionActive(sectionName, isActive) {
+            const { error } = await db.from('section_configs').update({ is_active: isActive }).eq('section_name', sectionName);
+            if (error) {
+                alert("설정 저장 실패: " + error.message);
+                fetchSectionConfigs();
+            } else {
+                const config = sectionConfigs.find(c => c.section_name === sectionName);
+                if (config) config.is_active = isActive;
+                fetchEvalItems();
+            }
+        }
+
         // 평가항목 데이터 로드
         async function fetchEvalItems() {
+            await fetchSectionConfigs();
+
             const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
             if (error) return console.error(error);
             
@@ -621,20 +634,36 @@
             const sectionSelect = document.getElementById('ei_section');
             sectionSelect.innerHTML = uniqueSections.map(s => `<option value="${s}">${s}</option>`).join('');
 
-            // 대항목 목록 추출 (드롭다운용)
-            const uniqueLargeItems = [...new Set(sortedData.map(item => item.large_item))];
+            // 대항목 목록 추출 및 정렬 (드롭다운용)
+            const cleanStr = s => (s || "").replace(/\s+/g, '');
+            const uniqueLargeItems = [...new Set(sortedData.map(item => item.large_item))]
+                .filter(Boolean)
+                .sort((a, b) => cleanStr(a).localeCompare(cleanStr(b), 'ko', { numeric: true }));
             const largeSelect = document.getElementById('ei_large');
             largeSelect.innerHTML = uniqueLargeItems.map(l => `<option value="${l}">${l}</option>`).join('');
 
-            // 섹션별 그룹화
+            // 비활성 섹션 키워드들 목록화
+            const inactiveKeywords = sectionConfigs.filter(c => !c.is_active).map(c => c.section_name);
+            const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
+
+            // 섹션별 그룹화 (비활성 섹션 필터링)
             const grouped = sortedData.reduce((acc, item) => {
+                const itemSectClean = cleanSect(item.section || "");
+                const isInactive = inactiveKeywords.some(keyword => itemSectClean.includes(keyword));
+                if (isInactive) return acc;
+
                 if (!acc[item.section]) acc[item.section] = [];
                 acc[item.section].push(item);
                 return acc;
             }, {});
 
             const container = document.getElementById('evalItemListContainer');
-            container.innerHTML = uniqueSections.map(section => {
+            // 필터링된 활성 섹션들만 노출
+            const activeSections = uniqueSections.filter(section => {
+                const sectClean = cleanSect(section || "");
+                return !inactiveKeywords.some(keyword => sectClean.includes(keyword));
+            });
+            container.innerHTML = activeSections.map(section => {
                 const items = grouped[section] || [];
                 if (items.length === 0) return '';
                 return `
@@ -2385,6 +2414,11 @@
                 
                 if (itemsError) throw itemsError;
 
+                // 섹션 설정 로드
+                const { data: configs, error: configError } = await db.from('section_configs').select('*');
+                const inactiveKeywords = configError ? [] : configs.filter(c => !c.is_active).map(c => c.section_name);
+                const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
+
                 const itemMap = {};
                 evalItems.forEach(item => {
                     itemMap[item.id] = item;
@@ -2513,22 +2547,29 @@
                     if (!textB && !textC) continue;
                     if (textB.length < 5 && textC.length < 5) continue; // 헤더성 짧은 단어 행 방어
 
-                    // 이 행에 일치하는 DB 평가 문항 검색
-                    const matchedDetail = detailItems.find(dt => {
-                        const evalItem = itemMap[dt.orig_id] || {};
-                        const dbStandard = cleanText(evalItem.standard || dt.standard);
+                    // 이 엑셀 행에 매칭되는 DB 원본 문항 검색 (비활성 섹션 여부 확인용)
+                    const dbItem = evalItems.find(item => {
+                        const dbStandard = cleanText(item.standard);
                         if (!dbStandard) return false;
-                        
-                        // 단방향 및 포함관계 엄격 확인 (설명 행이나 엉뚱한 행 오매칭 차단)
                         return textB.includes(dbStandard) || textC.includes(dbStandard);
                     });
 
-                    if (matchedDetail) {
-                        let statusVal = matchedDetail.status;
-                        if (statusVal === null || statusVal === undefined) {
-                            statusVal = '';
+                    if (dbItem) {
+                        const itemSectClean = cleanSect(dbItem.section || "");
+                        const isInactive = inactiveKeywords.some(keyword => itemSectClean.includes(keyword));
+
+                        if (isInactive) {
+                            // 비활성 섹션이면 무조건 'N/A'로 업데이트
+                            updateCell(`G${r}`, 'N/A');
+                        } else {
+                            // 활성 섹션이면 실제 평가 결과가 매핑되는지 확인
+                            const matchedDetail = detailItems.find(dt => dt.orig_id === dbItem.id);
+                            let statusVal = matchedDetail ? matchedDetail.status : '';
+                            if (statusVal === null || statusVal === undefined) {
+                                statusVal = '';
+                            }
+                            updateCell(`G${r}`, statusVal);
                         }
-                        updateCell(`G${r}`, statusVal);
                     }
                 }
 
@@ -2656,6 +2697,12 @@
                 .order('id', { ascending: true });
             
             if (itemsError) throw itemsError;
+
+            // 섹션 설정 로드
+            const { data: configs, error: configError } = await db.from('section_configs').select('*');
+            const inactiveKeywords = configError ? [] : configs.filter(c => !c.is_active).map(c => c.section_name);
+            const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
+
             const sortedItems = sortEvaluationItems(evalItems);
 
             const details = report.details || {};
@@ -2767,10 +2814,21 @@
             // 6행부터 상세 항목 매핑 렌더링
             let excelRowIndex = 6;
             sortedItems.forEach((evalItem, index) => {
+                const itemSectClean = cleanSect(evalItem.section || "");
+                const isInactive = inactiveKeywords.some(keyword => itemSectClean.includes(keyword));
+
                 const matchedDetail = detailItems.find(dt => dt.orig_id === evalItem.id);
-                let statusVal = matchedDetail ? matchedDetail.status : '';
-                if (statusVal === null || statusVal === undefined) statusVal = '';
-                const commentVal = matchedDetail ? matchedDetail.comment : '';
+                let statusVal = '';
+                let commentVal = '';
+
+                if (isInactive) {
+                    statusVal = 'N/A';
+                    commentVal = '비활성화된 섹션';
+                } else {
+                    statusVal = matchedDetail ? matchedDetail.status : '';
+                    if (statusVal === null || statusVal === undefined) statusVal = '';
+                    commentVal = matchedDetail ? matchedDetail.comment : '';
+                }
 
                 // rowspan 빌드
                 const spanInfo = rowspans[index];

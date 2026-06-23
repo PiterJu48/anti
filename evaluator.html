@@ -179,46 +179,14 @@
         let evaluationItems = [];      // 모든 평가 항목 원본 데이터
         let largeItemGroups = [];      // 대항목으로 그룹화된 데이터
 
-        // 평가항목 정렬 함수 (표준 섹션 순서대로 정렬)
+        // 평가항목 정렬 함수 (고유 정렬 번호 순서대로 정렬)
         function sortEvaluationItems(items) {
-            const KEYWORDS = [
-                "일반기준",
-                "사양관리",
-                "사육시설",
-                "소의상태",
-                "자유방목"
-            ];
-            
             return [...items].sort((a, b) => {
-                const sectA = a.section || "";
-                const sectB = b.section || "";
-                
-                const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
-                const cleanA = cleanSect(sectA);
-                const cleanB = cleanSect(sectB);
-                
-                const idxA = KEYWORDS.findIndex(key => cleanA.includes(key));
-                const idxB = KEYWORDS.findIndex(key => cleanB.includes(key));
-                
-                const valA = idxA === -1 ? 99 : idxA;
-                const valB = idxB === -1 ? 99 : idxB;
-                
-                if (valA !== valB) {
-                    return valA - valB;
+                const orderA = a.sort_order !== undefined && a.sort_order !== null ? a.sort_order : 999999;
+                const orderB = b.sort_order !== undefined && b.sort_order !== null ? b.sort_order : 999999;
+                if (orderA !== orderB) {
+                    return orderA - orderB;
                 }
-                
-                const largeA = a.large_item || "";
-                const largeB = b.large_item || "";
-                if (largeA !== largeB) {
-                    return largeA.localeCompare(largeB, 'ko');
-                }
-                
-                const smallA = a.small_item || "";
-                const smallB = b.small_item || "";
-                if (smallA !== smallB) {
-                    return smallA.localeCompare(smallB, 'ko');
-                }
-                
                 return a.id - b.id;
             });
         }
@@ -452,7 +420,17 @@
                 const { data, error } = await db.from('evaluation_items').select('*').order('id', { ascending: true });
                 if (error) throw error;
 
-                const sortedData = sortEvaluationItems(data);
+                // 섹션 설정 로드 및 비활성 필터링
+                const { data: configs, error: configError } = await db.from('section_configs').select('*');
+                const inactiveKeywords = configError ? [] : configs.filter(c => !c.is_active).map(c => c.section_name);
+                const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
+
+                const filteredData = data.filter(item => {
+                    const itemSectClean = cleanSect(item.section || "");
+                    return !inactiveKeywords.some(keyword => itemSectClean.includes(keyword));
+                });
+
+                const sortedData = sortEvaluationItems(filteredData);
 
                 // 1. 메모리 데이터 초기화 (라디오 버튼 및 의견 필드 백업용)
                 evaluationItems = sortedData.map(item => ({
@@ -1384,11 +1362,13 @@
 
         function cancelEvaluation() {
             if (confirm('평가를 중단하시겠습니까? 입력된 내용은 저장되지 않습니다. (임시 저장된 내용은 유지됩니다.)')) {
+                if (document.getElementById('reportStep1')) document.getElementById('reportStep1').style.display = 'block';
+                if (document.getElementById('reportStep2')) document.getElementById('reportStep2').style.display = 'none';
                 window.overallSummaryValue = "";
                 evaluationItems = [];
                 largeItemGroups = [];
                 currentGroupIndex = 0;
-                showTab('report');
+                showTab('assigned');
             }
         }
     </script>
