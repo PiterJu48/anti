@@ -318,7 +318,7 @@
 
             const tableName = type === 'official' ? 'evaluation_reports' : 'diagnosis_results';
             const { data, error } = await db.from(tableName)
-                .select(type === 'official' ? '*, farms(name)' : '*')
+                .select(type === 'official' ? '*, farms(*)' : '*')
                 .eq('id', id)
                 .single();
             
@@ -327,16 +327,11 @@
             document.getElementById('reportDate').innerText = '진단 일시: ' + new Date(data.created_at).toLocaleString();
             
             // 1. 진단 대상 농장 정보 조회 및 바인딩
-            let farmInfo = { name: data.user_id || '알수없음', breed: '젖소', scale: '120두', employees: '2명' };
-            const userName = (data.user_id === 'farm1') ? '행복농장주' : (data.user_id || '');
+            let farmInfo = { name: '알수없음', breed: '젖소', scale: '120두', employees: '2명' };
             
-            if (data.user_id) {
-                const { data: matchedFarms } = await db.from('farms')
-                    .select('*')
-                    .or(`representative.eq."${userName}",representative.eq."${data.user_id}"`);
-
-                if (matchedFarms && matchedFarms.length > 0) {
-                    const farm = matchedFarms[0];
+            if (type === 'official') {
+                if (data.farms) {
+                    const farm = data.farms;
                     let remarksData = { employee_count: '', breeding_scale: '' };
                     try {
                         if (farm.remarks && farm.remarks.trim().startsWith('{')) {
@@ -344,10 +339,33 @@
                         }
                     } catch (e) {}
                     
-                    farmInfo.name = farm.name || farm.representative;
+                    farmInfo.name = farm.name || farm.representative || '알수없음';
                     farmInfo.breed = farm.facility_scale || '젖소';
                     farmInfo.scale = remarksData.breeding_scale ? remarksData.breeding_scale + '두' : '120두';
                     farmInfo.employees = remarksData.employee_count ? remarksData.employee_count + '명' : '2명';
+                }
+            } else {
+                farmInfo.name = data.user_id || '알수없음';
+                const userName = (data.user_id === 'farm1') ? '행복농장주' : (data.user_id || '');
+                if (data.user_id) {
+                    const { data: matchedFarms } = await db.from('farms')
+                        .select('*')
+                        .or(`representative.eq."${userName}",representative.eq."${data.user_id}"`);
+
+                    if (matchedFarms && matchedFarms.length > 0) {
+                        const farm = matchedFarms[0];
+                        let remarksData = { employee_count: '', breeding_scale: '' };
+                        try {
+                            if (farm.remarks && farm.remarks.trim().startsWith('{')) {
+                                remarksData = JSON.parse(farm.remarks);
+                            }
+                        } catch (e) {}
+                        
+                        farmInfo.name = farm.name || farm.representative;
+                        farmInfo.breed = farm.facility_scale || '젖소';
+                        farmInfo.scale = remarksData.breeding_scale ? remarksData.breeding_scale + '두' : '120두';
+                        farmInfo.employees = remarksData.employee_count ? remarksData.employee_count + '명' : '2명';
+                    }
                 }
             }
             
