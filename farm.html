@@ -223,9 +223,43 @@
         let largeItemGroups = [];      // 대항목으로 그룹화된 데이터
         let currentGroupIndex = 0;     // 현재 표시 중인 대항목 그룹의 인덱스
 
-        // 평가항목 정렬 함수 (고유 정렬 번호 순서대로 정렬)
+        // 평가항목 정렬 및 비어있는 대/소항목 상속(Forward Fill) 처리 함수
         function sortEvaluationItems(items) {
-            return [...items].sort((a, b) => {
+            if (!items || items.length === 0) return [];
+
+            // 1. 순차 상속을 위해 반드시 id 오름차순으로 1차 정렬한 복사본 생성
+            const list = [...items].sort((a, b) => a.id - b.id);
+
+            let lastSection = "";
+            let lastLargeItem = "";
+            let lastSmallItem = "";
+
+            list.forEach(item => {
+                if (item.section) {
+                    if (item.section !== lastSection) {
+                        lastSection = item.section;
+                        lastLargeItem = "";
+                        lastSmallItem = "";
+                    }
+                } else {
+                    item.section = lastSection;
+                }
+
+                if (item.large_item) {
+                    lastLargeItem = item.large_item;
+                } else {
+                    item.large_item = lastLargeItem;
+                }
+
+                if (item.small_item) {
+                    lastSmallItem = item.small_item;
+                } else {
+                    item.small_item = lastSmallItem;
+                }
+            });
+
+            // 2. 상속이 완료된 데이터를 최종적으로 고유 정렬 번호(sort_order) 순서대로 정렬하여 반환
+            return list.sort((a, b) => {
                 const orderA = a.sort_order !== undefined && a.sort_order !== null ? a.sort_order : 999999;
                 const orderB = b.sort_order !== undefined && b.sort_order !== null ? b.sort_order : 999999;
                 if (orderA !== orderB) {
