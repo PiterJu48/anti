@@ -85,7 +85,7 @@
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 25px;">
                         <!-- 최근 진단 요약 카드 -->
                         <div class="card" style="padding: 25px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                            <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--primary-color);">최근 자가진단 종합 점수</h3>
+                            <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--primary-color);">최근 자가진단 결과</h3>
                             <div style="display: inline-flex; align-items: center; justify-content: center; width: 130px; height: 130px; border-radius: 50%; background: #e6fffa; border: 8px solid var(--primary-color); margin-bottom: 15px;">
                                 <span style="font-size: 2rem; font-weight: 800; color: var(--primary-color);" id="latestResultScore">0%</span>
                             </div>
@@ -104,7 +104,7 @@
 
                         <!-- 인증 판정 결과 카드 -->
                         <div class="card" id="suitabilityCard" style="padding: 25px; display: flex; flex-direction: column; justify-content: space-between; border: 2px solid #edf2f7;">
-                            <h3 style="margin-bottom: 12px; font-size: 1.1rem; color: var(--primary-color); text-align: center;">인증 심사 통과 예측</h3>
+                            <h3 style="margin-bottom: 12px; font-size: 1.1rem; color: var(--primary-color); text-align: center;">인증심사 통과 예측</h3>
                             <div style="text-align: center; margin-bottom: 15px;">
                                 <span id="latestSuitabilityBadge" style="font-size: 1.05rem; padding: 6px 16px; font-weight: 700; border-radius: 4px; display: inline-block;">
                                     -
@@ -112,11 +112,11 @@
                             </div>
                             <div style="display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem; color: #4a5568;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 6px;">
-                                    <span>일반 환경 (A그룹)</span>
-                                    <span id="latestGroupAScore" style="font-weight: 700;">0점 / 기준 85점</span>
+                                    <span>관리·시설(80점 이상)</span>
+                                    <span id="latestGroupAScore" style="font-weight: 700;">0점 / 기준 80점</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 6px;">
-                                    <span>소의 상태 (B그룹)</span>
+                                    <span>소의 상태(25점 이상)</span>
                                     <span id="latestGroupBScore" style="font-weight: 700;">0점 / 기준 25점</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px;">
@@ -126,11 +126,43 @@
                             </div>
                         </div>
                         
-                        <!-- 섹션별 적합 현황 그래프 카드 (Chart.js 연동) -->
-                        <div class="card" style="padding: 25px; display: flex; flex-direction: column; justify-content: space-between;">
-                            <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--primary-color);">영역별 적합률 (%)</h3>
-                            <div style="width: 100%; height: 200px; position: relative;">
-                                <canvas id="sectionChart"></canvas>
+                        <!-- 다른 농가와 비교 카드 (커스텀 게이지 바 구현) -->
+                        <div class="card" style="padding: 25px; display: flex; flex-direction: column; gap: 15px;">
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.15rem; color: #1e293b; font-weight: 700;">다른 농가와 비교</h3>
+                                <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #64748b;">동일 항목의 우리 농장 수준을 다른 농가 평균과 비교해 보세요.</p>
+                            </div>
+                            
+                            <!-- 범례 영역 -->
+                            <div style="display: flex; gap: 15px; justify-content: center; font-size: 0.85rem; color: #475569; padding: 5px 0; border-bottom: 1px solid #f1f5f9;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background-color: #0b4c8c;"></span>
+                                    <span>우리 농장</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background-color: #c8cdd6;"></span>
+                                    <span>전국 평균</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background-color: #2eab93;"></span>
+                                    <span>상위 30% 농가 평균</span>
+                                </div>
+                            </div>
+                            
+                            <!-- 그래프 본문 컨테이너 -->
+                            <div id="comparisonGraphContainer" style="display: flex; flex-direction: column; gap: 20px;">
+                                <!-- 자바스크립트로 데이터 연산 후 동적 렌더링 -->
+                            </div>
+                            
+                            <!-- 안내 설명 -->
+                            <div style="font-size: 0.75rem; color: #64748b; line-height: 1.5; border-top: 1px dashed #e2e8f0; padding-top: 10px; margin-top: 5px;">
+                                <div style="display: flex; align-items: flex-start; gap: 4px;">
+                                    <span style="font-weight: bold; color: #94a3b8;">ⓘ</span>
+                                    <div>
+                                        <div>전국 평균: 전체 농가의 평균 점수(적합률)</div>
+                                        <div>상위 30%: 적합률 상위 30% 농가의 평균 점수(적합률)</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -138,7 +170,7 @@
                     <!-- 취약점 체크 리스트 카드 -->
                     <div class="card" style="padding: 25px; border-left: 5px solid #e53e3e; background: #fff5f5;">
                         <h4 style="margin: 0 0 10px 0; color: #c53030; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
-                            <i class="fas fa-exclamation-triangle"></i> 우리 농장 중점 보완 취약점 리스트
+                            <i class="fas fa-exclamation-triangle"></i> 우리 농장 취약점(부적합 항목 리스트)
                         </h4>
                         <p style="font-size: 0.85rem; color: #9b2c2c; margin-bottom: 15px;">부적합으로 진단된 다음 항목들에 대해 즉각적인 개선 및 보완을 권장합니다.</p>
                         <div id="latestWeaknessList" style="display: flex; flex-direction: column; gap: 10px;">
@@ -151,7 +183,7 @@
             <!-- 진단이력 탭 (자가진단 이력) -->
             <div id="historyTab" class="tab-content" style="display: none;">
                 <section class="card">
-                    <h3><i class="fas fa-history"></i> 과거 자가진단 이력</h3>
+                    <h3><i class="fas fa-history"></i> 자가진단 이력</h3>
                     <p style="margin: 10px 0; color: #666; font-size: 0.95rem;">농장에서 자체적으로 실시한 자가진단 기록입니다.</p>
                     <div class="table-responsive" style="margin-top: 20px;">
                         <table class="data-table">
@@ -416,7 +448,7 @@
                 const scoreA = groupA_max > 0 ? Math.round((groupA_earned / groupA_max) * 100) : 0;
                 const scoreB = groupB_max > 0 ? Math.round((groupB_earned / groupB_max) * 100) : 0;
 
-                const isGroupAPass = scoreA >= 85;
+                const isGroupAPass = scoreA >= 80;
                 const isGroupBPass = scoreB >= 25;
                 const isYNPass = nonCompliantYNCount === 0;
                 const finalPassed = isGroupAPass && isGroupBPass && isYNPass;
@@ -464,51 +496,221 @@
                     `).join('');
                 }
 
-                // 5. 차트 데이터 가공
-                const chartLabels = Object.keys(sectionStats);
-                const chartData = chartLabels.map(label => {
-                    const stats = sectionStats[label];
-                    return stats.total > 0 ? Math.round((stats.compliant / stats.total) * 100) : 0;
-                });
+                // 5. 전체 평가 데이터 조회 및 통계 산출 (전국평균, 상위 30% 평균)
+                const { data: allReports, error: reportsError } = await db
+                    .from('evaluation_reports')
+                    .select('details');
 
-                // 6. Chart.js 막대 그래프 그리기 (Horizontal Bar)
-                const ctx = document.getElementById('sectionChart').getContext('2d');
-                if (sectionChartInstance) {
-                    sectionChartInstance.destroy();
+                if (reportsError) throw reportsError;
+
+                let officialScoresA = [];
+                let officialScoresB = [];
+
+                if (allReports && allReports.length > 0) {
+                    allReports.forEach(report => {
+                        let details = report.details || {};
+                        if (typeof details === 'string') {
+                            try { details = JSON.parse(details); } catch (e) { details = {}; }
+                        }
+
+                        let groupA_earned = 0;
+                        let groupA_max = 0;
+                        let groupB_earned = 0;
+                        let groupB_max = 0;
+
+                        evalItems.forEach(item => {
+                            const status = details[item.id];
+                            if (!status || status === 'N/A') return;
+
+                            const options = parseOptions(item.compliance_criteria);
+                            const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+
+                            const isGroupA = [
+                                '□ 일반기준',
+                                '□ 사양관리 방법',
+                                '□ 사육시설 및 환경',
+                                '□ 동물복지형 자유방목(추가 사항)'
+                            ].includes(item.section);
+
+                            const isGroupB = (item.section === '□ 소의 상태 평가');
+
+                            let earnedVal = 0;
+                            let maxVal = 0;
+
+                            if (numericValues.length > 0) {
+                                maxVal = Math.max(...numericValues);
+                                earnedVal = parseFloat(status);
+                                if (isNaN(earnedVal)) {
+                                    earnedVal = 0;
+                                }
+
+                                if (isGroupA) {
+                                    groupA_earned += earnedVal;
+                                    groupA_max += maxVal;
+                                } else if (isGroupB) {
+                                    groupB_earned += earnedVal;
+                                    groupB_max += maxVal;
+                                }
+                            } else {
+                                maxVal = 1;
+                                earnedVal = (status === 'Y') ? 1 : 0;
+
+                                if (isGroupA) {
+                                    groupA_earned += earnedVal;
+                                    groupA_max += maxVal;
+                                } else if (isGroupB) {
+                                    groupB_earned += earnedVal;
+                                    groupB_max += maxVal;
+                                }
+                            }
+                        });
+
+                        const sA = groupA_max > 0 ? Math.round((groupA_earned / groupA_max) * 100) : 0;
+                        const sB = groupB_max > 0 ? Math.round((groupB_earned / groupB_max) * 100) : 0;
+
+                        officialScoresA.push(sA);
+                        officialScoresB.push(sB);
+                    });
                 }
 
-                sectionChartInstance = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: chartLabels.map(l => l.replace('□ ', '')),
-                        datasets: [{
-                            label: '적합률 (%)',
-                            data: chartData,
-                            backgroundColor: 'rgba(44, 122, 123, 0.7)',
-                            borderColor: 'rgba(44, 122, 123, 1)',
-                            borderWidth: 1,
-                            borderRadius: 4
-                        }]
-                    },
-                    options: {
-                        indexAxis: 'y', // 가로 막대 그래프 설정
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false }
-                        },
-                        scales: {
-                            x: {
-                                min: 0,
-                                max: 100,
-                                ticks: { font: { size: 10 } }
-                            },
-                            y: {
-                                ticks: { font: { size: 10 } }
-                            }
-                        }
-                    }
-                });
+                // A그룹 (관리·시설) 통계 계산
+                let avgA = 0;
+                let top30AvgA = 0;
+                if (officialScoresA.length > 0) {
+                    const sum = officialScoresA.reduce((a, b) => a + b, 0);
+                    avgA = Math.round(sum / officialScoresA.length);
+
+                    const sorted = [...officialScoresA].sort((a, b) => b - a);
+                    const top30Count = Math.max(1, Math.ceil(sorted.length * 0.3));
+                    const top30Scores = sorted.slice(0, top30Count);
+                    top30AvgA = Math.round(top30Scores.reduce((a, b) => a + b, 0) / top30Count);
+                }
+
+                // B그룹 (소의 상태) 통계 계산
+                let avgB = 0;
+                let top30AvgB = 0;
+                if (officialScoresB.length > 0) {
+                    const sum = officialScoresB.reduce((a, b) => a + b, 0);
+                    avgB = Math.round(sum / officialScoresB.length);
+
+                    const sorted = [...officialScoresB].sort((a, b) => b - a);
+                    const top30Count = Math.max(1, Math.ceil(sorted.length * 0.3));
+                    const top30Scores = sorted.slice(0, top30Count);
+                    top30AvgB = Math.round(top30Scores.reduce((a, b) => a + b, 0) / top30Count);
+                }
+
+                // 6. 커스텀 그래프 동적 렌더링
+                const graphContainer = document.getElementById('comparisonGraphContainer');
+                if (graphContainer) {
+                    graphContainer.innerHTML = `
+                        <!-- 1. 관리·시설 (80점 이상) -->
+                        <div style="display: flex; align-items: center; gap: 20px; padding-bottom: 20px; border-bottom: 1px dashed #e2e8f0;">
+                            <!-- 아이콘 -->
+                            <div style="display: flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; background-color: #f8fafc; border: 1px solid #cbd5e0; flex-shrink: 0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="#475569" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 10v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V10" />
+                                    <path d="M12 2 2 9h20Z" />
+                                    <path d="M9 22V14a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v8" />
+                                    <path d="M10 17h4" />
+                                </svg>
+                            </div>
+                            
+                            <!-- 막대 그래프 영역 -->
+                            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 8px;">
+                                <div style="font-weight: 700; font-size: 0.95rem; color: #1e293b; margin-bottom: 2px;">관리·시설 (80점 이상)</div>
+                                
+                                <!-- 우리 농장 -->
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="flex-grow: 1; height: 10px; background-color: #f1f5f9; border-radius: 5px; overflow: hidden;">
+                                        <div style="width: ${scoreA}%; height: 100%; background-color: #0b4c8c; border-radius: 5px;"></div>
+                                    </div>
+                                    <span style="font-size: 0.85rem; font-weight: 700; color: #0b4c8c; width: 85px; text-align: left; flex-shrink: 0;">${scoreA}점 (${scoreA}%)</span>
+                                </div>
+                                
+                                <!-- 전국 평균 -->
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="flex-grow: 1; height: 10px; background-color: #f1f5f9; border-radius: 5px; overflow: hidden;">
+                                        <div style="width: ${avgA}%; height: 100%; background-color: #c8cdd6; border-radius: 5px;"></div>
+                                    </div>
+                                    <span style="font-size: 0.85rem; font-weight: 700; color: #64748b; width: 85px; text-align: left; flex-shrink: 0;">${avgA}점 (${avgA}%)</span>
+                                </div>
+                                
+                                <!-- 상위 30% 농가 평균 -->
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="flex-grow: 1; height: 10px; background-color: #f1f5f9; border-radius: 5px; overflow: hidden;">
+                                        <div style="width: ${top30AvgA}%; height: 100%; background-color: #2eab93; border-radius: 5px;"></div>
+                                    </div>
+                                    <span style="font-size: 0.85rem; font-weight: 700; color: #2eab93; width: 85px; text-align: left; flex-shrink: 0;">${top30AvgA}점 (${top30AvgA}%)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. 소의 상태 (25점 이상) -->
+                        <div style="display: flex; align-items: center; gap: 20px;">
+                            <!-- 아이콘 -->
+                            <div style="display: flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; background-color: #fff5f5; border: 1px solid #fed7d7; flex-shrink: 0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="38" height="38" fill="none" stroke="#e53e3e" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <!-- 뿔 -->
+                                    <path d="M 33 26 C 30 12, 42 12, 42 26" fill="#ffffff" />
+                                    <path d="M 67 26 C 70 12, 58 12, 58 26" fill="#ffffff" />
+                                    
+                                    <!-- 귀 -->
+                                    <path d="M 28 40 C 14 38, 14 50, 28 48" fill="#ffffff" />
+                                    <path d="M 72 40 C 86 38, 86 50, 72 48" fill="#ffffff" />
+                                    
+                                    <!-- 얼굴 윤곽 -->
+                                    <path d="M 32 32 C 32 22, 68 22, 68 32 C 68 55, 62 65, 50 65 C 38 65, 32 55, 32 32 Z" fill="#ffffff" />
+                                    
+                                    <!-- 얼룩무늬 점 (왼쪽/오른쪽 각각 2개씩 배치) -->
+                                    <circle cx="37" cy="36" r="2.5" fill="#e53e3e" stroke="none" />
+                                    <circle cx="35" cy="43" r="2.2" fill="#e53e3e" stroke="none" />
+                                    <circle cx="63" cy="36" r="2.5" fill="#e53e3e" stroke="none" />
+                                    <circle cx="65" cy="43" r="2.2" fill="#e53e3e" stroke="none" />
+                                    
+                                    <!-- 눈 -->
+                                    <circle cx="44" cy="40" r="2.5" fill="#e53e3e" stroke="none" />
+                                    <circle cx="56" cy="40" r="2.5" fill="#e53e3e" stroke="none" />
+                                    
+                                    <!-- 코/입 영역 -->
+                                    <ellipse cx="50" cy="54" rx="10" ry="6" fill="#ffffff" />
+                                    
+                                    <!-- 콧구멍 -->
+                                    <circle cx="46" cy="54" r="1.5" fill="#e53e3e" stroke="none" />
+                                    <circle cx="54" cy="54" r="1.5" fill="#e53e3e" stroke="none" />
+                                </svg>
+                            </div>
+                            
+                            <!-- 막대 그래프 영역 -->
+                            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 8px;">
+                                <div style="font-weight: 700; font-size: 0.95rem; color: #1e293b; margin-bottom: 2px;">소의 상태 (25점 이상)</div>
+                                
+                                <!-- 우리 농장 -->
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="flex-grow: 1; height: 10px; background-color: #f1f5f9; border-radius: 5px; overflow: hidden;">
+                                        <div style="width: ${scoreB}%; height: 100%; background-color: #0b4c8c; border-radius: 5px;"></div>
+                                    </div>
+                                    <span style="font-size: 0.85rem; font-weight: 700; color: #0b4c8c; width: 85px; text-align: left; flex-shrink: 0;">${scoreB}점 (${scoreB}%)</span>
+                                </div>
+                                
+                                <!-- 전국 평균 -->
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="flex-grow: 1; height: 10px; background-color: #f1f5f9; border-radius: 5px; overflow: hidden;">
+                                        <div style="width: ${avgB}%; height: 100%; background-color: #c8cdd6; border-radius: 5px;"></div>
+                                    </div>
+                                    <span style="font-size: 0.85rem; font-weight: 700; color: #64748b; width: 85px; text-align: left; flex-shrink: 0;">${avgB}점 (${avgB}%)</span>
+                                </div>
+                                
+                                <!-- 상위 30% 농가 평균 -->
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="flex-grow: 1; height: 10px; background-color: #f1f5f9; border-radius: 5px; overflow: hidden;">
+                                        <div style="width: ${top30AvgB}%; height: 100%; background-color: #2eab93; border-radius: 5px;"></div>
+                                    </div>
+                                    <span style="font-size: 0.85rem; font-weight: 700; color: #2eab93; width: 85px; text-align: left; flex-shrink: 0;">${top30AvgB}점 (${top30AvgB}%)</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
 
             } catch (err) {
                 console.error('최근 진단결과 조회 및 차트 렌더링 실패:', err);

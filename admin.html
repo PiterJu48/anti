@@ -179,6 +179,8 @@
                                     <th>대표자</th>
                                     <th>주소</th>
                                     <th>시설규모</th>
+                                    <th>조직원(고용인)수</th>
+                                    <th>사육규모</th>
                                     <th>관리</th>
                                 </tr>
                             </thead>
@@ -214,6 +216,14 @@
                             <div class="form-group">
                                 <label>전화번호</label>
                                 <input type="text" id="phoneNumber">
+                            </div>
+                            <div class="form-group">
+                                <label>조직원(고용인)수</label>
+                                <input type="text" id="employeeCount">
+                            </div>
+                            <div class="form-group">
+                                <label>사육규모</label>
+                                <input type="text" id="breedingScale">
                             </div>
                         </div>
                         <div class="form-group" style="margin-top: 15px;">
@@ -360,6 +370,15 @@
                                 <option value="">전체 평가자</option>
                             </select>
                         </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-weight: 500; font-size: 0.9rem;">심사유형:</label>
+                            <select id="searchAuditType" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem;">
+                                <option value="">전체 유형</option>
+                                <option value="신규">신규</option>
+                                <option value="갱신">갱신</option>
+                                <option value="사후관리">사후관리</option>
+                            </select>
+                        </div>
                         <button class="btn-primary" style="padding: 8px 20px; margin-left: auto;" onclick="filterResults()"><i class="fas fa-search"></i> 검색</button>
                     </div>
                     <div class="table-responsive">
@@ -367,6 +386,7 @@
                             <thead>
                                 <tr>
                                     <th>농장명</th>
+                                    <th>심사유형</th>
                                     <th>평가자</th>
                                     <th>점수</th>
                                     <th>제출일시</th>
@@ -413,7 +433,32 @@
                         </div>
                         
                         <h3>항목별 결과 수정</h3>
-                        <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                        
+                        <!-- 부분 수정용 필터 영역 추가 -->
+                        <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; background: #edf2f7; padding: 15px; border-radius: 8px;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <label style="font-weight: bold; font-size: 0.85rem; display: block; margin-bottom: 4px; color: #4a5568;">대항목 필터</label>
+                                <select id="editFilterLarge" onchange="doFilterEditItems()" style="width: 100%; padding: 8px; border: 1px solid #cbd5e0; border-radius: 6px; background-color: white;">
+                                    <option value="">전체 대항목</option>
+                                </select>
+                            </div>
+                            <div style="flex: 1; min-width: 150px;">
+                                <label style="font-weight: bold; font-size: 0.85rem; display: block; margin-bottom: 4px; color: #4a5568;">결과 필터</label>
+                                <select id="editFilterStatus" onchange="doFilterEditItems()" style="width: 100%; padding: 8px; border: 1px solid #cbd5e0; border-radius: 6px; background-color: white;">
+                                    <option value="">전체 결과</option>
+                                    <option value="Y">적합 (Y)</option>
+                                    <option value="N">부적합 (N)</option>
+                                    <option value="N/A">N/A (생략)</option>
+                                    <option value="unselected">미선택</option>
+                                </select>
+                            </div>
+                            <div style="flex: 2; min-width: 250px;">
+                                <label style="font-weight: bold; font-size: 0.85rem; display: block; margin-bottom: 4px; color: #4a5568;">평가 기준 검색</label>
+                                <input type="text" id="editFilterSearch" oninput="doFilterEditItems()" placeholder="평가 기준 문항을 검색하세요..." style="width: 100%; padding: 8px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box;">
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
                             <table class="data-table">
                                 <thead>
                                     <tr>
@@ -451,11 +496,15 @@
         }
         .modal-content {
             background-color: #fefefe;
-            margin: 10% auto;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
             padding: 30px;
             border-radius: 12px;
             width: 600px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            box-sizing: border-box;
         }
         .form-grid {
             display: grid;
@@ -1037,24 +1086,93 @@
 
         function renderFarms(farms) {
             const list = document.getElementById('farmList');
-            list.innerHTML = farms.map(farm => `
-                <tr>
-                    <td>${farm.name}</td>
-                    <td>${farm.representative}</td>
-                    <td>${farm.address}</td>
-                    <td>${farm.facility_scale || '-'}</td>
-                    <td>
-                        <button class="logout-btn" style="padding: 4px 8px;" onclick="editFarm(${JSON.stringify(farm).replace(/"/g, '&quot;')})">수정</button>
-                        <button class="logout-btn" style="padding: 4px 8px; color: red;" onclick="deleteFarm(${farm.id})">삭제</button>
-                    </td>
-                </tr>
-            `).join('');
+            list.innerHTML = farms.map(farm => {
+                // remarks 파싱하여 심사등록 여부 확인
+                let remarksData = { notes: '', audit_type: '', eval_date: '', is_registered: false, employee_count: '', breeding_scale: '' };
+                try {
+                    if (farm.remarks && farm.remarks.trim().startsWith('{')) {
+                        remarksData = JSON.parse(farm.remarks);
+                    }
+                } catch (e) {
+                    // 파싱 에러 발생 시 무시
+                }
+                const isRegistered = remarksData.is_registered === true;
+                const regButtonText = isRegistered ? '등록해제' : '심사등록';
+                const regButtonStyle = isRegistered 
+                    ? 'color: #e53e3e; border-color: #e53e3e;' 
+                    : 'color: #2b6cb0; border-color: #2b6cb0;';
+
+                const employeeCount = remarksData.employee_count || '-';
+                const breedingScale = remarksData.breeding_scale || '-';
+
+                // JSON 직렬화 시 안전 처리
+                const farmJson = JSON.stringify(farm).replace(/"/g, '&quot;');
+
+                return `
+                    <tr>
+                        <td>${farm.name}</td>
+                        <td>${farm.representative}</td>
+                        <td>${farm.address}</td>
+                        <td>${farm.facility_scale || '-'}</td>
+                        <td>${employeeCount}</td>
+                        <td>${breedingScale}</td>
+                        <td>
+                            <button class="logout-btn" style="padding: 4px 8px; ${regButtonStyle}" onclick="toggleFarmAuditRegistration(${farm.id})">${regButtonText}</button>
+                            <button class="logout-btn" style="padding: 4px 8px;" onclick="editFarm(${farmJson})">수정</button>
+                            <button class="logout-btn" style="padding: 4px 8px; color: red;" onclick="deleteFarm(${farm.id})">삭제</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // 농장 심사등록 여부 토글 함수 (최신 DB 조회 방식으로 변경하여 데이터 덮어쓰기 유실 방지)
+        async function toggleFarmAuditRegistration(id) {
+            // DB에서 최신 farm 데이터 조회
+            const { data: farm, error: fetchError } = await db.from('farms').select('remarks').eq('id', id).single();
+            if (fetchError) {
+                return alert('농장 정보를 가져오는데 실패했습니다: ' + fetchError.message);
+            }
+
+            let remarksData = { notes: '', audit_type: '', eval_date: '', is_registered: false, employee_count: '', breeding_scale: '' };
+            try {
+                if (farm.remarks && farm.remarks.trim().startsWith('{')) {
+                    remarksData = JSON.parse(farm.remarks);
+                } else {
+                    remarksData.notes = farm.remarks || '';
+                }
+            } catch (e) {
+                remarksData.notes = farm.remarks || '';
+            }
+
+            // 심사등록 상태 토글
+            remarksData.is_registered = !remarksData.is_registered;
+
+            const { error } = await db
+                .from('farms')
+                .update({ remarks: JSON.stringify(remarksData) })
+                .eq('id', id);
+
+            if (error) {
+                alert('심사등록 상태 변경에 실패했습니다: ' + error.message);
+            } else {
+                fetchFarms();
+                fetchAuditTargets(); // 대시보드 심사대상 목록도 함께 갱신
+            }
         }
 
         function openFarmModal() {
             document.getElementById('modalTitle').innerText = '신규 농장 등록';
             document.getElementById('farmForm').reset();
             document.getElementById('farmId').value = '';
+            
+            // 전역 상태 초기화
+            window.currentFarmAuditType = '';
+            window.currentFarmEvalDate = '';
+            window.currentFarmIsRegistered = false;
+            window.currentFarmEmployeeCount = '';
+            window.currentFarmBreedingScale = '';
+            
             document.getElementById('farmModal').style.display = 'block';
         }
 
@@ -1072,7 +1190,7 @@
             document.getElementById('phoneNumber').value = farm.phone_number || '';
             
             // remarks 파싱
-            let remarksData = { notes: '', audit_type: '', eval_date: '' };
+            let remarksData = { notes: '', audit_type: '', eval_date: '', is_registered: false, employee_count: '', breeding_scale: '' };
             try {
                 if (farm.remarks && farm.remarks.trim().startsWith('{')) {
                     remarksData = JSON.parse(farm.remarks);
@@ -1083,10 +1201,15 @@
                 remarksData.notes = farm.remarks || '';
             }
             document.getElementById('remarks').value = remarksData.notes || '';
+            document.getElementById('employeeCount').value = remarksData.employee_count || '';
+            document.getElementById('breedingScale').value = remarksData.breeding_scale || '';
             
             // 임시 저장을 위해 전역에 킵
             window.currentFarmAuditType = remarksData.audit_type || '';
             window.currentFarmEvalDate = remarksData.eval_date || '';
+            window.currentFarmIsRegistered = remarksData.is_registered || false;
+            window.currentFarmEmployeeCount = remarksData.employee_count || '';
+            window.currentFarmBreedingScale = remarksData.breeding_scale || '';
             
             document.getElementById('farmModal').style.display = 'block';
         }
@@ -1110,15 +1233,32 @@
             e.preventDefault();
             const id = document.getElementById('farmId').value;
             
+            const employeeCountVal = document.getElementById('employeeCount').value;
+            const breedingScaleVal = document.getElementById('breedingScale').value;
+            
             let remarksValue = document.getElementById('remarks').value;
             if (id) {
-                // 수정 시 기존 audit_type, eval_date가 유실되지 않도록 JSON 유지
+                // 수정 시 기존 audit_type, eval_date, is_registered가 유실되지 않도록 JSON 유지
                 const auditType = window.currentFarmAuditType || '';
                 const evalDate = window.currentFarmEvalDate || '';
+                const isRegistered = window.currentFarmIsRegistered || false;
                 remarksValue = JSON.stringify({
                     notes: remarksValue,
                     audit_type: auditType,
-                    eval_date: evalDate
+                    eval_date: evalDate,
+                    is_registered: isRegistered,
+                    employee_count: employeeCountVal,
+                    breeding_scale: breedingScaleVal
+                });
+            } else {
+                // 신규 등록
+                remarksValue = JSON.stringify({
+                    notes: remarksValue,
+                    audit_type: '',
+                    eval_date: '',
+                    is_registered: false,
+                    employee_count: employeeCountVal,
+                    breeding_scale: breedingScaleVal
                 });
             }
 
@@ -1158,12 +1298,12 @@
 
         // 평가 결과 데이터 로드
         async function fetchResults() {
-            // farms 테이블에서 대표자(농장주명)를 가져오기 위해 대표자 컬럼도 포함해서 로드
+            // farms 테이블에서 대표자(농장주명) 및 remarks(심사유형 파싱용)를 포함해서 로드
             const { data, error } = await db
                 .from('evaluation_reports')
                 .select(`
                     *,
-                    farms ( name, representative )
+                    farms ( name, representative, remarks )
                 `)
                 .order('created_at', { ascending: false });
 
@@ -1230,6 +1370,7 @@
             const targetFarm = document.getElementById('searchFarm').value;
             const targetOwner = document.getElementById('searchOwner').value;
             const targetEvaluator = document.getElementById('searchEvaluator').value;
+            const targetAuditType = document.getElementById('searchAuditType').value;
 
             const filtered = window.allReports.filter(report => {
                 // 1. 연도 필터링
@@ -1256,6 +1397,18 @@
                     if (report.evaluator_id !== targetEvaluator) return false;
                 }
 
+                // 5. 심사유형 필터링
+                if (targetAuditType) {
+                    let farmRemarks = { audit_type: '-' };
+                    try {
+                        if (report.farms && report.farms.remarks && report.farms.remarks.trim().startsWith('{')) {
+                            farmRemarks = JSON.parse(report.farms.remarks);
+                        }
+                    } catch (e) {}
+                    const auditType = farmRemarks.audit_type || '-';
+                    if (auditType !== targetAuditType) return false;
+                }
+
                 return true;
             });
 
@@ -1270,18 +1423,29 @@
 
         function renderResults(results) {
             const list = document.getElementById('resultsList');
-            list.innerHTML = results.map(report => `
-                <tr>
-                    <td>${report.farms ? report.farms.name : '알 수 없음'}</td>
-                    <td>${getEvaluatorName(report.evaluator_id)}</td>
-                    <td><span style="font-weight: bold; color: ${report.score >= 80 ? '#2c7a7b' : '#e53e3e'}">${report.score}점</span></td>
-                    <td>${new Date(report.created_at).toLocaleString()}</td>
-                    <td>
-                        <button class="logout-btn" style="padding: 4px 8px; color: var(--primary-color); border-color: var(--primary-color);" onclick="viewReportDetail(${report.id})">바로보기</button>
-                        <button class="btn-primary" style="padding: 4px 8px; font-size: 0.8rem; background-color: #2c7a7b;" onclick="exportToExcel(${report.id})"><i class="fas fa-file-excel"></i> 엑셀 다운로드</button>
-                    </td>
-                </tr>
-            `).join('');
+            list.innerHTML = results.map(report => {
+                let farmRemarks = { audit_type: '-' };
+                try {
+                    if (report.farms && report.farms.remarks && report.farms.remarks.trim().startsWith('{')) {
+                        farmRemarks = JSON.parse(report.farms.remarks);
+                    }
+                } catch (e) {}
+                const auditType = farmRemarks.audit_type || '-';
+
+                return `
+                    <tr>
+                        <td>${report.farms ? report.farms.name : '알 수 없음'}</td>
+                        <td><span class="status-badge status-process" style="font-size: 0.75rem;">${auditType}</span></td>
+                        <td>${getEvaluatorName(report.evaluator_id)}</td>
+                        <td><span style="font-weight: bold; color: ${report.score >= 80 ? '#2c7a7b' : '#e53e3e'}">${report.score}점</span></td>
+                        <td>${new Date(report.created_at).toLocaleString()}</td>
+                        <td>
+                            <button class="logout-btn" style="padding: 4px 8px; color: var(--primary-color); border-color: var(--primary-color);" onclick="viewReportDetail(${report.id})">바로보기</button>
+                            <button class="btn-primary" style="padding: 4px 8px; font-size: 0.8rem; background-color: #2c7a7b;" onclick="exportToExcel(${report.id})"><i class="fas fa-file-excel"></i> 엑셀 다운로드</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
 
         // 적합 기준 텍스트를 파싱하여 라디오 버튼 옵션 배열로 반환하는 함수
@@ -1458,159 +1622,218 @@
             const isGroupBPass = scoreB >= 25;
             const isYNPass = nonCompliantYNItems.length === 0;
             const finalPassed = isGroupAPass && isGroupBPass && isYNPass;
+
+            // 엑셀 셀 병합(rowspan)을 위한 연속 구간 사전 계산
+            const rowspans = [];
+            for (let i = 0; i < normalizedDetails.length; i++) {
+                const itemDetail = normalizedDetails[i];
+                const key = (itemDetail && itemDetail.orig_id !== undefined && itemDetail.orig_id !== null) ? itemDetail.orig_id : i;
+                let evalItem = null;
+                if (itemDetail && itemDetail.standard !== undefined && itemDetail.standard !== null && String(itemDetail.standard).trim() !== '') {
+                    evalItem = itemDetail;
+                } else {
+                    evalItem = itemMap[key] || (evalItems && evalItems[i]) || {};
+                }
+                rowspans.push({
+                    large: 1,
+                    small: 1,
+                    large_item: evalItem.large_item || '미확인 대항목',
+                    small_item: evalItem.small_item || ''
+                });
+            }
+
+            // 대항목 rowspan 계산
+            for (let i = 0; i < rowspans.length; i++) {
+                if (rowspans[i].large === 0) continue;
+                let span = 1;
+                for (let j = i + 1; j < rowspans.length; j++) {
+                    if (rowspans[j].large_item === rowspans[i].large_item) {
+                        span++;
+                        rowspans[j].large = 0; // 병합 처리하여 렌더링 스킵 지시
+                    } else {
+                        break;
+                    }
+                }
+                rowspans[i].large = span;
+            }
+
+            // 소항목 rowspan 계산 (동일 대항목 내에서 소항목 일치 여부 체크)
+            for (let i = 0; i < rowspans.length; i++) {
+                if (rowspans[i].small === 0) continue;
+                let span = 1;
+                for (let j = i + 1; j < rowspans.length; j++) {
+                    if (rowspans[j].large_item === rowspans[i].large_item && rowspans[j].small_item === rowspans[i].small_item) {
+                        span++;
+                        rowspans[j].small = 0; // 병합 처리하여 렌더링 스킵 지시
+                    } else {
+                        break;
+                    }
+                }
+                rowspans[i].small = span;
+            }
             
             let detailsHtml = `
-                <!-- 최종 인증 심사 결과 판정 보드 -->
-                <div class="card" style="border: 2px solid ${finalPassed ? '#2c7a7b' : '#e53e3e'}; background: ${finalPassed ? '#e6fffa' : '#fff5f5'}; margin-bottom: 20px; padding: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid ${finalPassed ? '#b2f5ea' : '#fed7d7'}; padding-bottom: 12px; margin-bottom: 15px;">
-                        <h4 style="margin: 0; font-size: 1.15rem; color: ${finalPassed ? '#234e52' : '#742a2a'}; display: flex; align-items: center; gap: 8px;">
-                            <i class="fas ${finalPassed ? 'fa-check-circle' : 'fa-times-circle'}"></i> 
-                            최종 인증 판정 결과
-                        </h4>
-                        <span class="status-badge" style="font-size: 1rem; padding: 6px 16px; font-weight: 700; border-radius: 4px; ${finalPassed ? 'background: #2c7a7b; color: #fff;' : 'background: #e53e3e; color: #fff;'}">
-                            ${finalPassed ? '인증 적합 (합격)' : '인증 부적합 (불합격)'}
-                        </span>
+                <!-- 탭 메뉴 추가 -->
+                <div style="display: flex; gap: 10px; border-bottom: 2px solid #e2e8f0; margin-bottom: 20px;">
+                    <button id="tab-report-btn" class="detail-tab-btn active" onclick="switchDetailTab('report', ${report.id})" style="padding: 10px 20px; font-weight: bold; border: none; background: none; border-bottom: 3px solid #3182ce; cursor: pointer; color: #3182ce; font-size: 1rem;">상세 판정 리포트</button>
+                    <button id="tab-excel-btn" class="detail-tab-btn" onclick="switchDetailTab('excel', ${report.id})" style="padding: 10px 20px; font-weight: bold; border: none; background: none; border-bottom: 3px solid transparent; cursor: pointer; color: #718096; font-size: 1rem;">엑셀 원본 미리보기</button>
+                </div>
+
+                <div id="detailTabReportContent">
+                    <!-- 최종 인증 심사 결과 판정 보드 -->
+                    <div class="card" style="border: 2px solid ${finalPassed ? '#2c7a7b' : '#e53e3e'}; background: ${finalPassed ? '#e6fffa' : '#fff5f5'}; margin-bottom: 20px; padding: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid ${finalPassed ? '#b2f5ea' : '#fed7d7'}; padding-bottom: 12px; margin-bottom: 15px;">
+                            <h4 style="margin: 0; font-size: 1.15rem; color: ${finalPassed ? '#234e52' : '#742a2a'}; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas ${finalPassed ? 'fa-check-circle' : 'fa-times-circle'}"></i> 
+                                최종 인증 판정 결과
+                            </h4>
+                            <span class="status-badge" style="font-size: 1rem; padding: 6px 16px; font-weight: 700; border-radius: 4px; ${finalPassed ? 'background: #2c7a7b; color: #fff;' : 'background: #e53e3e; color: #fff;'}">
+                                ${finalPassed ? '인증 적합 (합격)' : '인증 부적합 (불합격)'}
+                            </span>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 10px;">
+                            <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
+                                <div style="font-size: 0.85rem; color: #718096; font-weight: 600; margin-bottom: 4px;">일반 환경 점수 (A그룹)</div>
+                                <div style="font-size: 1.2rem; font-weight: 700; color: ${isGroupAPass ? '#2c7a7b' : '#e53e3e'};">
+                                    ${scoreA}점 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 85점 이상</span>
+                                </div>
+                                <span style="font-size: 0.75rem; font-weight: 600; color: ${isGroupAPass ? '#2c7a7b' : '#e53e3e'}; display: inline-block; margin-top: 4px;">
+                                    ${isGroupAPass ? '● 통과' : '● 탈락'}
+                                </span>
+                            </div>
+                            <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
+                                <div style="font-size: 0.85rem; color: #718096; font-weight: 600; margin-bottom: 4px;">소 상태 평가 점수 (B그룹)</div>
+                                <div style="font-size: 1.2rem; font-weight: 700; color: ${isGroupBPass ? '#2c7a7b' : '#e53e3e'};">
+                                    ${scoreB}점 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 25점 이상</span>
+                                </div>
+                                <span style="font-size: 0.75rem; font-weight: 600; color: ${isGroupBPass ? '#2c7a7b' : '#e53e3e'}; display: inline-block; margin-top: 4px;">
+                                    ${isGroupBPass ? '● 통과' : '● 탈락'}
+                                </span>
+                            </div>
+                            <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
+                                <div style="font-size: 0.85rem; color: #718096; font-weight: 600; margin-bottom: 4px;">적부 문항 부적합 개수</div>
+                                <div style="font-size: 1.2rem; font-weight: 700; color: ${isYNPass ? '#2c7a7b' : '#e53e3e'};">
+                                    ${nonCompliantYNItems.length}개 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 0개</span>
+                                </div>
+                                <span style="font-size: 0.75rem; font-weight: 600; color: ${isYNPass ? '#2c7a7b' : '#e53e3e'}; display: inline-block; margin-top: 4px;">
+                                    ${isYNPass ? '● 통과' : '● 탈락'}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        ${!finalPassed ? `
+                            <div style="background: #fffaf0; border: 1px solid #feebc8; border-radius: 6px; padding: 12px; margin-top: 15px; text-align: left;">
+                                <h5 style="margin: 0 0 8px 0; color: #dd6b20; font-size: 0.9rem;"><i class="fas fa-exclamation-triangle"></i> 부적합 판단 근거 상세 사유</h5>
+                                <ul style="margin: 0; padding-left: 20px; font-size: 0.85rem; color: #7b341e; line-height: 1.6;">
+                                    ${!isGroupAPass ? `<li>일반 사육환경 영역(A그룹)의 합계점수 비율이 85점 미만입니다. (현재: <strong>${scoreA}점</strong>)</li>` : ''}
+                                    ${!isGroupBPass ? `<li>소의 상태 평가 영역(B그룹)의 합계점수 비율이 25점 미만입니다. (현재: <strong>${scoreB}점</strong>)</li>` : ''}
+                                    ${!isYNPass ? `
+                                        <li>필수 적부 항목 중 <strong>부적합(N)</strong> 판정된 항목이 존재합니다 (${nonCompliantYNItems.length}건):
+                                            <ul style="margin: 4px 0; padding-left: 15px; color: #9c4221; font-size: 0.8rem; list-style-type: circle;">
+                                                ${nonCompliantYNItems.map(item => `<li>[${item.large_item || '미확인'}${item.small_item ? ' - ' + item.small_item : ''}] ${item.standard}</li>`).join('')}
+                                            </ul>
+                                        </li>
+                                    ` : ''}
+                                </ul>
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="card" style="background: #f8fafc; margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <p><strong>농장명:</strong> ${report.farms ? report.farms.name : '-'}</p>
+                                <p><strong>대표자:</strong> ${report.farms ? report.farms.representative : '-'}</p>
+                                <p><strong>주소:</strong> ${report.farms ? report.farms.address : '-'}</p>
+                            </div>
+                            <div>
+                                <p><strong>평가자:</strong> ${getEvaluatorName(report.evaluator_id)}</p>
+                                <p><strong>평가 점수:</strong> <span style="font-size: 1.2rem; font-weight: bold; color: var(--primary-color);">${report.score}점</span></p>
+                                <p><strong>평가 일시:</strong> ${new Date(report.created_at).toLocaleString()}</p>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                            <p><strong>종합 의견:</strong></p>
+                            <p style="white-space: pre-wrap; background: white; padding: 10px; border-radius: 4px; border: 1px solid #eee;">${report.summary || '의견 없음'}</p>
+                        </div>
                     </div>
                     
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 10px;">
-                        <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
-                            <div style="font-size: 0.85rem; color: #718096; font-weight: 600; margin-bottom: 4px;">일반 환경 점수 (A그룹)</div>
-                            <div style="font-size: 1.2rem; font-weight: 700; color: ${isGroupAPass ? '#2c7a7b' : '#e53e3e'};">
-                                ${scoreA}점 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 85점 이상</span>
-                            </div>
-                            <span style="font-size: 0.75rem; font-weight: 600; color: ${isGroupAPass ? '#2c7a7b' : '#e53e3e'}; display: inline-block; margin-top: 4px;">
-                                ${isGroupAPass ? '● 통과' : '● 탈락'}
-                            </span>
-                        </div>
-                        <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
-                            <div style="font-size: 0.85rem; color: #718096; font-weight: 600; margin-bottom: 4px;">소 상태 평가 점수 (B그룹)</div>
-                            <div style="font-size: 1.2rem; font-weight: 700; color: ${isGroupBPass ? '#2c7a7b' : '#e53e3e'};">
-                                ${scoreB}점 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 25점 이상</span>
-                            </div>
-                            <span style="font-size: 0.75rem; font-weight: 600; color: ${isGroupBPass ? '#2c7a7b' : '#e53e3e'}; display: inline-block; margin-top: 4px;">
-                                ${isGroupBPass ? '● 통과' : '● 탈락'}
-                            </span>
-                        </div>
-                        <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
-                            <div style="font-size: 0.85rem; color: #718096; font-weight: 600; margin-bottom: 4px;">적부 문항 부적합 개수</div>
-                            <div style="font-size: 1.2rem; font-weight: 700; color: ${isYNPass ? '#2c7a7b' : '#e53e3e'};">
-                                ${nonCompliantYNItems.length}개 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 0개</span>
-                            </div>
-                            <span style="font-size: 0.75rem; font-weight: 600; color: ${isYNPass ? '#2c7a7b' : '#e53e3e'}; display: inline-block; margin-top: 4px;">
-                                ${isYNPass ? '● 통과' : '● 탈락'}
-                            </span>
-                        </div>
-                    </div>
-                    
-                    ${!finalPassed ? `
-                        <div style="background: #fffaf0; border: 1px solid #feebc8; border-radius: 6px; padding: 12px; margin-top: 15px; text-align: left;">
-                            <h5 style="margin: 0 0 8px 0; color: #dd6b20; font-size: 0.9rem;"><i class="fas fa-exclamation-triangle"></i> 부적합 판단 근거 상세 사유</h5>
-                            <ul style="margin: 0; padding-left: 20px; font-size: 0.85rem; color: #7b341e; line-height: 1.6;">
-                                ${!isGroupAPass ? `<li>일반 사육환경 영역(A그룹)의 합계점수 비율이 85점 미만입니다. (현재: <strong>${scoreA}점</strong>)</li>` : ''}
-                                ${!isGroupBPass ? `<li>소의 상태 평가 영역(B그룹)의 합계점수 비율이 25점 미만입니다. (현재: <strong>${scoreB}점</strong>)</li>` : ''}
-                                ${!isYNPass ? `
-                                    <li>필수 적부 항목 중 <strong>부적합(N)</strong> 판정된 항목이 존재합니다 (${nonCompliantYNItems.length}건):
-                                        <ul style="margin: 4px 0; padding-left: 15px; color: #9c4221; font-size: 0.8rem; list-style-type: circle;">
-                                            ${nonCompliantYNItems.map(item => `<li>[${item.large_item || '미확인'}${item.small_item ? ' - ' + item.small_item : ''}] ${item.standard}</li>`).join('')}
-                                        </ul>
-                                    </li>
-                                ` : ''}
-                            </ul>
-                        </div>
-                    ` : ''}
-                </div>
-                <div class="card" style="background: #f8fafc; margin-bottom: 20px;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div>
-                            <p><strong>농장명:</strong> ${report.farms ? report.farms.name : '-'}</p>
-                            <p><strong>대표자:</strong> ${report.farms ? report.farms.representative : '-'}</p>
-                            <p><strong>주소:</strong> ${report.farms ? report.farms.address : '-'}</p>
-                        </div>
-                        <div>
-                            <p><strong>평가자:</strong> ${getEvaluatorName(report.evaluator_id)}</p>
-                            <p><strong>평가 점수:</strong> <span style="font-size: 1.2rem; font-weight: bold; color: var(--primary-color);">${report.score}점</span></p>
-                            <p><strong>평가 일시:</strong> ${new Date(report.created_at).toLocaleString()}</p>
-                        </div>
-                    </div>
-                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-                        <p><strong>종합 의견:</strong></p>
-                        <p style="white-space: pre-wrap; background: white; padding: 10px; border-radius: 4px; border: 1px solid #eee;">${report.summary || '의견 없음'}</p>
-                    </div>
-                </div>
-                
-                <h3>항목별 평가 내역</h3>
-                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 50%;">평가 기준</th>
-                                <th style="width: 25%; text-align: center;">결과</th>
-                                <th style="width: 25%;">평가 의견</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${normalizedDetails.map((itemDetail, index) => {
-                                const key = (itemDetail && itemDetail.orig_id !== undefined && itemDetail.orig_id !== null) ? itemDetail.orig_id : index;
-                                
-                                // 다단계 복원 기법 (1: 스냅샷 우선 적용, 2: ID 매치, 3: 순서 매치)
-                                let evalItem = null;
-                                if (itemDetail && itemDetail.standard !== undefined && itemDetail.standard !== null && String(itemDetail.standard).trim() !== '') {
-                                    evalItem = {
-                                        large_item: itemDetail.large_item || '미확인 대항목',
-                                        small_item: itemDetail.small_item || '',
-                                        standard: itemDetail.standard,
-                                        compliance_criteria: itemDetail.compliance_criteria || ''
-                                    };
-                                } else if (itemMap[key]) {
-                                    evalItem = itemMap[key];
-                                } else {
-                                    if (evalItems && evalItems[index]) {
-                                        evalItem = evalItems[index];
-                                    } else {
+                    <h3>인증 평가표</h3>
+                    <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
+                        <table class="data-table" style="width: 100%; border-collapse: collapse; border: 1.5px solid #a0aec0;">
+                            <thead>
+                                <tr style="background-color: #edf2f7;">
+                                    <th style="width: 50%; border: 1px solid #cbd5e0; padding: 12px 10px; font-weight: bold; color: #2d3748; font-size: 0.85rem;">평가 기준</th>
+                                    <th style="width: 25%; border: 1px solid #cbd5e0; padding: 12px 10px; font-weight: bold; color: #2d3748; font-size: 0.85rem; text-align: center;">결과</th>
+                                    <th style="width: 25%; border: 1px solid #cbd5e0; padding: 12px 10px; font-weight: bold; color: #2d3748; font-size: 0.85rem; text-align: center;">평가 의견</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${normalizedDetails.map((itemDetail, index) => {
+                                    const key = (itemDetail && itemDetail.orig_id !== undefined && itemDetail.orig_id !== null) ? itemDetail.orig_id : index;
+                                    
+                                    // 다단계 복원 기법
+                                    let evalItem = null;
+                                    if (itemDetail && itemDetail.standard !== undefined && itemDetail.standard !== null && String(itemDetail.standard).trim() !== '') {
                                         evalItem = {
-                                            large_item: '미확인 대항목',
-                                            small_item: '',
-                                            standard: '미확인 문항 (ID: ' + key + ')',
-                                            compliance_criteria: ''
+                                            standard: itemDetail.standard,
+                                            compliance_criteria: itemDetail.compliance_criteria || ''
                                         };
+                                    } else if (itemMap[key]) {
+                                        evalItem = itemMap[key];
+                                    } else {
+                                        if (evalItems && evalItems[index]) {
+                                            evalItem = evalItems[index];
+                                        } else {
+                                            evalItem = {
+                                                standard: '미확인 문항 (ID: ' + key + ')',
+                                                compliance_criteria: ''
+                                            };
+                                        }
                                     }
-                                }
-                                
-                                const options = parseOptions(evalItem.compliance_criteria);
-                                const matchedOption = options.find(o => o.value === itemDetail.status);
-                                const statusText = matchedOption ? matchedOption.label : (itemDetail.status || '-');
-                                
-                                // 상태별 뱃지 스타일 분기
-                                let badgeClass = '';
-                                if (itemDetail.status === 'Y' || (itemDetail.status !== 'N' && !isNaN(parseFloat(itemDetail.status)) && parseFloat(itemDetail.status) > 0)) {
-                                    badgeClass = 'status-completed'; // 녹색 (적합 혹은 0점 초과)
-                                } else if (itemDetail.status === 'N' || itemDetail.status === '0') {
-                                    badgeClass = 'status-pending'; // 적색/오렌지 (부적합 혹은 0점)
-                                } else {
-                                    badgeClass = 'status-process'; // 블루 (NA 등)
-                                }
-                                
-                                return `
-                                    <tr>
-                                        <td style="font-size: 0.9rem; white-space: normal; line-height: 1.5; padding: 12px 15px;">
-                                            <span style="font-weight: 700; color: #4a5568; display: block; margin-bottom: 4px; font-size: 0.8rem;">
-                                                [${evalItem.large_item || '-'}] ${evalItem.small_item || ''}
-                                            </span>
-                                            ${evalItem.standard || '미확인 문항 (ID: ' + key + ')'}
-                                        </td>
-                                        <td style="text-align: center; vertical-align: middle;">
-                                            <span class="status-badge ${badgeClass}" style="font-size: 0.8rem; padding: 4px 10px; display: inline-block; white-space: normal; max-width: 150px; text-align: left;">
-                                                ${statusText}
-                                            </span>
-                                        </td>
-                                        <td style="font-size: 0.85rem; white-space: normal; line-height: 1.4; vertical-align: middle;">
-                                            ${itemDetail.comment || '-'}
-                                        </td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                    </table>
+                                    
+                                    const options = parseOptions(evalItem.compliance_criteria);
+                                    const matchedOption = options.find(o => o.value === itemDetail.status);
+                                    const statusText = matchedOption ? matchedOption.label : (itemDetail.status || '-');
+                                    
+                                    // 상태별 뱃지 스타일 분기
+                                    let badgeClass = '';
+                                    if (itemDetail.status === 'Y' || (itemDetail.status !== 'N' && !isNaN(parseFloat(itemDetail.status)) && parseFloat(itemDetail.status) > 0)) {
+                                        badgeClass = 'status-completed';
+                                    } else if (itemDetail.status === 'N' || itemDetail.status === '0') {
+                                        badgeClass = 'status-pending';
+                                    } else {
+                                        badgeClass = 'status-process';
+                                    }
+                                    
+                                    return `
+                                        <tr style="background-color: ${index % 2 === 0 ? '#ffffff' : '#fcfdfd'};">
+                                            <td style="font-size: 0.85rem; border: 1px solid #cbd5e0; padding: 12px 10px; vertical-align: middle; line-height: 1.5; color: #2d3748; white-space: normal;">
+                                                ${evalItem.standard || '미확인 문항'}
+                                            </td>
+                                            <td style="text-align: center; vertical-align: middle; border: 1px solid #cbd5e0; padding: 12px 6px;">
+                                                <span class="status-badge ${badgeClass}" style="font-size: 0.75rem; padding: 4px 8px; display: inline-block; font-weight: bold; border-radius: 4px;">
+                                                    ${statusText}
+                                                </span>
+                                            </td>
+                                            <td style="font-size: 0.8rem; border: 1px solid #cbd5e0; padding: 12px 10px; vertical-align: middle; line-height: 1.4; color: #718096; white-space: normal;">
+                                                ${itemDetail.comment || '-'}
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 엑셀 미리보기 탭 추가 -->
+                <div id="detailTabExcelContent" style="display: none; padding: 15px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; max-height: 550px; overflow: auto; position: relative;">
+                    <div id="excelPreviewLoading" style="text-align: center; padding: 50px 0; color: #718096;">
+                        <i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 10px;"></i>
+                        <p>실시간 엑셀 시트 생성 중...</p>
+                    </div>
+                    <div id="excelPreviewTableContainer" style="overflow-x: auto;"></div>
                 </div>
             `;
             
@@ -1654,6 +1877,10 @@
         // 수정용 전역 데이터 홀더
         let currentEditingReport = null;
         let currentEvalItemsList = [];
+        
+        // 메모리 상의 실시간 수정 데이터 보관소
+        // key: itemId, value: { status, comment, measurements, cow_conditions, evalItem }
+        window.editingReportDetailsMap = {};
 
         // 평가결과 수정 모달 열기
         async function openEditReport(report) {
@@ -1677,11 +1904,12 @@
             const sortedItems = sortEvaluationItems(evalItems);
             currentEvalItemsList = sortedItems;
 
-            const tbody = document.getElementById('editReportItemsBody');
             const details = report.details || {};
             const sortedDetailKeys = Object.keys(details).map(k => parseInt(k)).sort((a, b) => a - b);
 
-            tbody.innerHTML = sortedItems.map((item, idx) => {
+            // 1. 메모리 수정 맵 구성
+            window.editingReportDetailsMap = {};
+            sortedItems.forEach((item, idx) => {
                 let itemDetail = { status: null, comment: '' };
                 if (details[item.id]) {
                     itemDetail = details[item.id];
@@ -1691,16 +1919,115 @@
                         itemDetail = details[oldId];
                     }
                 }
+                
+                // 기존 데이터에 들어있던 measurements 및 cow_conditions 획득
+                const measurementsVal = itemDetail.measurements || (details[item.id] ? details[item.id].measurements : []) || [];
+                const cowConditionsVal = itemDetail.cow_conditions || (details[item.id] ? details[item.id].cow_conditions : null) || null;
+
+                window.editingReportDetailsMap[item.id] = {
+                    orig_id: item.id,
+                    section: item.section || '',
+                    large_item: item.large_item || '',
+                    small_item: item.small_item || '',
+                    standard: item.standard || '',
+                    compliance_criteria: item.compliance_criteria || '',
+                    status: itemDetail.status,
+                    comment: itemDetail.comment || '',
+                    measurements: measurementsVal,
+                    cow_conditions: cowConditionsVal,
+                    evalItem: item
+                };
+            });
+
+            // 2. 대항목 필터 구성
+            const largeFilter = document.getElementById('editFilterLarge');
+            if (largeFilter) {
+                const uniqueLarges = [...new Set(sortedItems.map(item => item.large_item).filter(l => l))];
+                largeFilter.innerHTML = '<option value="">전체 대항목</option>' + 
+                    uniqueLarges.map(l => `<option value="${l}">${l}</option>`).join('');
+                largeFilter.value = '';
+            }
+
+            // 3. 상태 및 검색어 필터 초기화
+            const statusFilter = document.getElementById('editFilterStatus');
+            if (statusFilter) statusFilter.value = '';
+            
+            const searchFilter = document.getElementById('editFilterSearch');
+            if (searchFilter) searchFilter.value = '';
+
+            // 4. 최초 필터 렌더링 호출
+            doFilterEditItems();
+
+            document.getElementById('editReportModal').style.display = 'block';
+        }
+
+        // 입력 컨트롤 변경 사항을 실시간 메모리 데이터에 기록하는 함수
+        function updateEditingDetail(itemId, val, type) {
+            if (window.editingReportDetailsMap[itemId]) {
+                if (type === 'status') {
+                    window.editingReportDetailsMap[itemId].status = val === 'null' ? null : val;
+                } else if (type === 'comment') {
+                    window.editingReportDetailsMap[itemId].comment = val;
+                }
+            }
+        }
+
+        // 필터링 적용 및 문항 입력 목록 렌더링 함수
+        function doFilterEditItems() {
+            const tbody = document.getElementById('editReportItemsBody');
+            if (!tbody) return;
+
+            const largeVal = document.getElementById('editFilterLarge').value;
+            const statusVal = document.getElementById('editFilterStatus').value;
+            const searchVal = document.getElementById('editFilterSearch').value.toLowerCase().replace(/\s+/g, '');
+
+            const filteredItems = currentEvalItemsList.filter(item => {
+                const detail = window.editingReportDetailsMap[item.id] || { status: null, comment: '' };
+                
+                // 대항목 매칭
+                if (largeVal && item.large_item !== largeVal) return false;
+
+                // 결과 상태 매칭
+                if (statusVal) {
+                    if (statusVal === 'unselected') {
+                        if (detail.status !== null && detail.status !== undefined && detail.status !== '') return false;
+                    } else {
+                        if (detail.status !== statusVal) return false;
+                    }
+                }
+
+                // 검색어 매칭
+                if (searchVal) {
+                    const standardText = (item.standard || '').toLowerCase().replace(/\s+/g, '');
+                    if (!standardText.includes(searchVal)) return false;
+                }
+
+                return true;
+            });
+
+            if (filteredItems.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" style="text-align: center; color: #718096; padding: 30px;">
+                            조건에 부합하는 평가 항목이 없습니다.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = filteredItems.map(item => {
+                const detail = window.editingReportDetailsMap[item.id];
                 const options = parseOptions(item.compliance_criteria);
                 const isOptional = (item.section && item.section.includes('(추가 사항)')) || (item.large_item && item.large_item.includes('(추가 사항)'));
                 const hasParentheses = item.section && item.section.includes('(') && item.section.includes(')');
 
                 // 라디오 옵션 렌더링
                 const optionsHtml = options.map(opt => {
-                    const checked = itemDetail.status === opt.value ? 'checked' : '';
+                    const checked = detail.status === opt.value ? 'checked' : '';
                     return `
                         <label style="margin-right: 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
-                            <input type="radio" name="edit_item_${item.id}" value="${opt.value}" ${checked}>
+                            <input type="radio" name="edit_item_${item.id}" value="${opt.value}" ${checked} onchange="updateEditingDetail(${item.id}, this.value, 'status')">
                             <span>${opt.label}</span>
                         </label>
                     `;
@@ -1709,7 +2036,7 @@
                 // 추가 사항 또는 괄호 포함 섹션의 경우 N/A 선택지 노출
                 const naHtml = (isOptional || hasParentheses) ? `
                     <label style="margin-right: 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; color: #718096; font-weight: 500;">
-                        <input type="radio" name="edit_item_${item.id}" value="N/A" ${itemDetail.status === 'N/A' || itemDetail.status === null ? 'checked' : ''}>
+                        <input type="radio" name="edit_item_${item.id}" value="N/A" ${detail.status === 'N/A' || detail.status === null ? 'checked' : ''} onchange="updateEditingDetail(${item.id}, this.value, 'status')">
                         <span>N/A (생략)</span>
                     </label>
                 ` : '';
@@ -1729,21 +2056,20 @@
                             </div>
                         </td>
                         <td>
-                            <input type="text" id="edit_comm_${item.id}" value="${itemDetail.comment || ''}" style="width: 100%; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box;">
+                            <input type="text" value="${detail.comment || ''}" oninput="updateEditingDetail(${item.id}, this.value, 'comment')" style="width: 100%; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box;">
                         </td>
                     </tr>
                 `;
             }).join('');
-
-            document.getElementById('editReportModal').style.display = 'block';
         }
 
         // 평가결과 수정 모달 닫기
         function closeEditReportModal() {
             document.getElementById('editReportModal').style.display = 'none';
+            window.editingReportDetailsMap = {};
         }
 
-        // 평가결과 수정 저장 핸들러
+        // 평가결과 수정 저장 핸들러 (전체 메모리 맵 기반 최종 저장 및 점수 계산)
         document.getElementById('editReportForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const reportId = document.getElementById('editReportId').value;
@@ -1753,65 +2079,40 @@
             let maxPoints = 0;
             const details = [];
 
-            // 문항별 변경 내용 검증 및 점수 재계산
+            // 문항별 변경 내용 검증 및 점수 재계산 (메모리 맵의 전체 데이터 순회)
             for (let item of currentEvalItemsList) {
-                const radios = document.getElementsByName(`edit_item_${item.id}`);
-                let selectedValue = null;
-                for (let radio of radios) {
-                    if (radio.checked) {
-                        selectedValue = radio.value;
-                        break;
-                    }
-                }
-
-                const commentVal = document.getElementById(`edit_comm_${item.id}`).value;
+                const detail = window.editingReportDetailsMap[item.id];
+                if (!detail) continue;
 
                 // 필수 항목인데 미선택된 경우 체크
                 const isOptional = (item.section && item.section.includes('(추가 사항)')) || (item.large_item && item.large_item.includes('(추가 사항)'));
-                if (selectedValue === null && !isOptional) {
-                    alert(`평가 기준 '${item.standard}' 문항을 선택해 주세요.`);
+                if ((detail.status === null || detail.status === undefined || detail.status === '') && !isOptional) {
+                    alert(`필수 항목인 '${item.standard}' 문항에 대한 평가 결과가 선택되지 않았습니다. 해당 대항목 필터로 이동해 마저 완료해 주세요.`);
                     return;
                 }
 
-                // 기존 데이터에 들어있던 cow_conditions 보존 처리
-                let existingCowConditions = null;
-                if (currentEditingReport && currentEditingReport.details) {
-                    const oldDetails = currentEditingReport.details;
-                    if (Array.isArray(oldDetails)) {
-                        const matched = oldDetails.find(d => d.orig_id === item.id || d.standard === item.standard);
-                        if (matched) existingCowConditions = matched.cow_conditions;
-                    } else {
-                        if (oldDetails[item.id]) {
-                            existingCowConditions = oldDetails[item.id].cow_conditions;
-                        }
-                    }
-                }
-
                 details.push({
-                    orig_id: item.id,
-                    section: item.section || '',
-                    large_item: item.large_item || '',
-                    small_item: item.small_item || '',
-                    standard: item.standard || '',
-                    compliance_criteria: item.compliance_criteria || '',
-                    status: selectedValue,
-                    comment: commentVal || '',
-                    measurements: (currentEditingReport && currentEditingReport.details && 
-                                   (Array.isArray(currentEditingReport.details) ? 
-                                    (currentEditingReport.details.find(d => d.orig_id === item.id) || {}).measurements : 
-                                    (currentEditingReport.details[item.id] || {}).measurements)) || [],
-                    cow_conditions: existingCowConditions
+                    orig_id: detail.orig_id,
+                    section: detail.section,
+                    large_item: detail.large_item,
+                    small_item: detail.small_item,
+                    standard: detail.standard,
+                    compliance_criteria: detail.compliance_criteria,
+                    status: detail.status,
+                    comment: detail.comment,
+                    measurements: detail.measurements,
+                    cow_conditions: detail.cow_conditions
                 });
 
                 // 점수 계산 (N/A 및 생략 건은 제외)
-                if (selectedValue !== null && selectedValue !== 'N/A') {
+                if (detail.status !== null && detail.status !== undefined && detail.status !== '' && detail.status !== 'N/A') {
                     const options = parseOptions(item.compliance_criteria);
                     const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
 
                     if (numericValues.length > 0) {
                         // 점수형 문항
                         const maxVal = Math.max(...numericValues);
-                        let earnedVal = parseFloat(selectedValue);
+                        let earnedVal = parseFloat(detail.status);
                         if (isNaN(earnedVal)) {
                             earnedVal = 0;
                         }
@@ -1819,10 +2120,10 @@
                         maxPoints += maxVal;
                     } else {
                         // 적부형 문항
-                        if (selectedValue === 'Y') {
+                        if (detail.status === 'Y') {
                             earnedPoints += 1;
                             maxPoints += 1;
-                        } else if (selectedValue === 'N') {
+                        } else if (detail.status === 'N') {
                             maxPoints += 1;
                         }
                     }
@@ -1867,7 +2168,18 @@
                 const tbody = document.getElementById('auditTargetList');
                 if (!tbody) return;
 
-                if (!farms || farms.length === 0) {
+                // remarks를 파싱하여 심사등록된 농장만 필터링
+                const registeredFarms = (farms || []).filter(farm => {
+                    let remarksData = { is_registered: false };
+                    try {
+                        if (farm.remarks && farm.remarks.trim().startsWith('{')) {
+                            remarksData = JSON.parse(farm.remarks);
+                        }
+                    } catch (e) {}
+                    return remarksData.is_registered === true;
+                });
+
+                if (!registeredFarms || registeredFarms.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">등록된 심사대상이 없습니다.</td></tr>';
                     
                     // 빈 목록일 때 카드 숫자 0으로 업데이트
@@ -1882,9 +2194,9 @@
                 let renewCount = 0;
                 let postCount = 0;
 
-                tbody.innerHTML = farms.map(farm => {
+                tbody.innerHTML = registeredFarms.map(farm => {
                     // remarks 컬럼에 저장된 JSON 데이터 파싱
-                    let remarksData = { notes: '', audit_type: '', eval_date: '' };
+                    let remarksData = { notes: '', audit_type: '', eval_date: '', is_registered: false };
                     try {
                         if (farm.remarks && farm.remarks.trim().startsWith('{')) {
                             remarksData = JSON.parse(farm.remarks);
@@ -1949,7 +2261,7 @@
             document.getElementById('auditFarmId').value = farm.id;
             document.getElementById('auditFarmName').value = farm.name;
 
-            let remarksData = { notes: '', audit_type: '', eval_date: '' };
+            let remarksData = { notes: '', audit_type: '', eval_date: '', is_registered: false, employee_count: '', breeding_scale: '' };
             try {
                 if (farm.remarks && farm.remarks.trim().startsWith('{')) {
                     remarksData = JSON.parse(farm.remarks);
@@ -1980,6 +2292,9 @@
 
             // 저장 시 비고 정보 보존을 위해 전역 객체에 기존 비고 기록
             window.currentFarmNotes = remarksData.notes || '';
+            window.currentFarmIsRegistered = remarksData.is_registered || false;
+            window.currentFarmEmployeeCount = remarksData.employee_count || '';
+            window.currentFarmBreedingScale = remarksData.breeding_scale || '';
 
             document.getElementById('auditModal').style.display = 'block';
         }
@@ -2000,7 +2315,10 @@
             const remarksValue = JSON.stringify({
                 notes: window.currentFarmNotes || '',
                 audit_type: auditType,
-                eval_date: evalDate
+                eval_date: evalDate,
+                is_registered: window.currentFarmIsRegistered || false,
+                employee_count: window.currentFarmEmployeeCount || '',
+                breeding_scale: window.currentFarmBreedingScale || ''
             });
 
             const { error } = await db
@@ -2222,6 +2540,286 @@
                 console.error('Error exporting to Excel:', e);
                 alert('엑셀 내보내기 중 오류가 발생했습니다: ' + e.message);
             }
+        }
+
+        // 엑셀 미리보기 탭 전환 함수
+        function switchDetailTab(tabType, reportId) {
+            const reportBtn = document.getElementById('tab-report-btn');
+            const excelBtn = document.getElementById('tab-excel-btn');
+            const reportContent = document.getElementById('detailTabReportContent');
+            const excelContent = document.getElementById('detailTabExcelContent');
+            
+            if (tabType === 'report') {
+                reportBtn.classList.add('active');
+                reportBtn.style.color = '#3182ce';
+                reportBtn.style.borderBottomColor = '#3182ce';
+                
+                excelBtn.classList.remove('active');
+                excelBtn.style.color = '#718096';
+                excelBtn.style.borderBottomColor = 'transparent';
+                
+                reportContent.style.display = 'block';
+                excelContent.style.display = 'none';
+            } else {
+                excelBtn.classList.add('active');
+                excelBtn.style.color = '#3182ce';
+                excelBtn.style.borderBottomColor = '#3182ce';
+                
+                reportBtn.classList.remove('active');
+                reportBtn.style.color = '#718096';
+                reportBtn.style.borderBottomColor = 'transparent';
+                
+                reportContent.style.display = 'none';
+                excelContent.style.display = 'block';
+                
+                const container = document.getElementById('excelPreviewTableContainer');
+                if (container.innerHTML === '') {
+                    loadExcelPreview(reportId);
+                }
+            }
+        }
+
+        // 실시간 엑셀 미리보기 로드 함수
+        async function loadExcelPreview(reportId) {
+            const loading = document.getElementById('excelPreviewLoading');
+            const container = document.getElementById('excelPreviewTableContainer');
+            try {
+                const html = await getExcelPreviewHtml(reportId);
+                loading.style.display = 'none';
+                container.innerHTML = html;
+                
+                // 엑셀 스타일 가공
+                const table = container.querySelector('table');
+                if (table) {
+                    table.removeAttribute('border');
+                    table.style.width = '100%';
+                    table.style.borderCollapse = 'collapse';
+                    table.style.fontFamily = "'Malgun Gothic', '맑은 고딕', sans-serif";
+                    table.style.fontSize = '12px';
+                    table.style.backgroundColor = '#ffffff';
+                    table.style.border = '2px solid #a0aec0';
+                    
+                    const tds = table.querySelectorAll('td');
+                    tds.forEach(td => {
+                        td.style.border = '1px solid #cbd5e0';
+                        td.style.padding = '8px 10px';
+                        td.style.verticalAlign = 'middle';
+                        td.style.lineHeight = '1.5';
+                        
+                        // 특정 헤더 행들의 스타일 처리
+                        const text = td.innerText.trim();
+                        if (text.startsWith('□') || text === '동물복지 축산농장(한우·젖소) 인증 평가표') {
+                            td.style.fontWeight = 'bold';
+                            td.style.backgroundColor = '#f7fafc';
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('Error loading excel preview:', e);
+                loading.innerHTML = `<p style="color: red; padding: 20px;"><i class="fas fa-exclamation-circle"></i> 엑셀 미리보기를 생성하는 중 오류가 발생했습니다:<br>${e.message}</p>`;
+            }
+        }
+
+        // 백그라운드 엑셀 빌드 및 HTML 변환용 함수 (순수 HTML/CSS 엑셀 뷰어 시뮬레이터)
+        async function getExcelPreviewHtml(reportId) {
+            // 1. 해당 보고서 데이터 로드
+            const { data: report, error } = await db
+                .from('evaluation_reports')
+                .select('*, farms (*)')
+                .eq('id', reportId)
+                .single();
+
+            if (error) throw error;
+
+            // 2. 전체 평가 항목 문장 매핑을 위한 항목 리스트 로드
+            const { data: evalItems, error: itemsError } = await db
+                .from('evaluation_items')
+                .select('*')
+                .order('id', { ascending: true });
+            
+            if (itemsError) throw itemsError;
+            const sortedItems = sortEvaluationItems(evalItems);
+
+            const details = report.details || {};
+            const detailItems = Array.isArray(details) ? details : Object.keys(details).map(k => ({ orig_id: parseInt(k), ...details[k] }));
+
+            // 3. 대/소항목 rowspan 계산
+            const rowspans = [];
+            for (let i = 0; i < sortedItems.length; i++) {
+                rowspans.push({
+                    large: 1,
+                    small: 1,
+                    large_item: sortedItems[i].large_item || '미확인 대항목',
+                    small_item: sortedItems[i].small_item || ''
+                });
+            }
+
+            // 대항목 rowspan 계산
+            for (let i = 0; i < rowspans.length; i++) {
+                if (rowspans[i].large === 0) continue;
+                let span = 1;
+                for (let j = i + 1; j < rowspans.length; j++) {
+                    if (rowspans[j].large_item === rowspans[i].large_item) {
+                        span++;
+                        rowspans[j].large = 0; // 병합
+                    } else {
+                        break;
+                    }
+                }
+                rowspans[i].large = span;
+            }
+
+            // 소항목 rowspan 계산 (동일 대항목 내에서 소항목 일치 여부 체크)
+            for (let i = 0; i < rowspans.length; i++) {
+                if (rowspans[i].small === 0) continue;
+                let span = 1;
+                for (let j = i + 1; j < rowspans.length; j++) {
+                    if (rowspans[j].large_item === rowspans[i].large_item && rowspans[j].small_item === rowspans[i].small_item) {
+                        span++;
+                        rowspans[j].small = 0; // 병합
+                    } else {
+                        break;
+                    }
+                }
+                rowspans[i].small = span;
+            }
+
+            // 4. HTML 조립
+            let html = `
+                <div style="font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 12px; background: #fff; padding: 15px; border-radius: 8px; overflow-x: auto;">
+                    <!-- 엑셀 스타일 가이드 테이블 (농가 기본정보 포함) -->
+                    <table style="border-collapse: collapse; width: 100%; border: 2.5px solid #a0aec0; margin-bottom: 20px; background-color: #ffffff; min-width: 900px;">
+                        <thead>
+                            <!-- 엑셀 열 머리글 (A~F) -->
+                            <tr style="background-color: #f1f5f9; text-align: center; font-weight: bold; color: #4a5568; font-size: 11px; height: 24px;">
+                                <th style="width: 5%; border: 1px solid #cbd5e0; background-color: #e2e8f0; font-weight: normal; color: #718096;"></th>
+                                <th style="width: 15%; border: 1px solid #cbd5e0;">A</th>
+                                <th style="width: 15%; border: 1px solid #cbd5e0;">B</th>
+                                <th style="width: 35%; border: 1px solid #cbd5e0;">C</th>
+                                <th style="width: 15%; border: 1px solid #cbd5e0;">D</th>
+                                <th style="width: 10%; border: 1px solid #cbd5e0;">E</th>
+                                <th style="width: 10%; border: 1px solid #cbd5e0;">F</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- 1행: 타이틀 -->
+                            <tr style="height: 45px;">
+                                <td style="background-color: #f1f5f9; text-align: center; color: #718096; border: 1px solid #cbd5e0; font-size: 11px;">1</td>
+                                <td colspan="6" style="border: 1px solid #cbd5e0; padding: 10px; font-size: 16px; font-weight: bold; text-align: center; background-color: #edf2f7; color: #1a202c; letter-spacing: 1px;">
+                                    동물복지 축산농장(한우·젖소) 인증 평가표
+                                </td>
+                            </tr>
+                            <!-- 2행: 헤더 분류 -->
+                            <tr style="background-color: #f7fafc; font-weight: bold; text-align: center; color: #4a5568; height: 32px;">
+                                <td style="background-color: #f1f5f9; text-align: center; color: #718096; border: 1px solid #cbd5e0; font-size: 11px;">2</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">농장명</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">대표자명</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">주소</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">시설규모</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">전화번호</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">종합 의견</td>
+                            </tr>
+                            <!-- 3행: 농장 기본 정보 데이터 -->
+                            <tr style="height: 38px; color: #2d3748;">
+                                <td style="background-color: #f1f5f9; text-align: center; color: #718096; border: 1px solid #cbd5e0; font-size: 11px;">3</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 8px 10px; font-weight: bold;">${report.farms ? report.farms.name : '-'}</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 8px 10px; text-align: center;">${report.farms ? report.farms.representative : '-'}</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 8px 10px;">${report.farms ? report.farms.address : '-'}</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 8px 10px; text-align: center;">${report.farms ? report.farms.facility_scale : '-'}</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 8px 10px; text-align: center;">${report.farms ? report.farms.phone_number : '-'}</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 8px 10px; color: #4a5568; white-space: pre-wrap;">${report.summary || '의견 없음'}</td>
+                            </tr>
+                            <!-- 4행: 빈 구분행 -->
+                            <tr style="height: 15px; background-color: #fcfdfd;">
+                                <td style="background-color: #f1f5f9; text-align: center; color: #718096; border: 1px solid #cbd5e0; font-size: 11px;">4</td>
+                                <td colspan="6" style="border: 1px solid #cbd5e0; background-color: #f7fafc;"></td>
+                            </tr>
+                            <!-- 5행: 평가표 헤더 -->
+                            <tr style="background-color: #edf2f7; font-weight: bold; text-align: center; color: #2d3748; height: 32px;">
+                                <td style="background-color: #f1f5f9; text-align: center; color: #718096; border: 1px solid #cbd5e0; font-size: 11px;">5</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">대항목</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">소항목</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">평가 기준</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">적합 기준 / 배점</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">결과</td>
+                                <td style="border: 1px solid #cbd5e0; padding: 6px;">비고</td>
+                            </tr>
+            `;
+
+            // 6행부터 상세 항목 매핑 렌더링
+            let excelRowIndex = 6;
+            sortedItems.forEach((evalItem, index) => {
+                const matchedDetail = detailItems.find(dt => dt.orig_id === evalItem.id);
+                let statusVal = matchedDetail ? matchedDetail.status : '';
+                if (statusVal === null || statusVal === undefined) statusVal = '';
+                const commentVal = matchedDetail ? matchedDetail.comment : '';
+
+                // rowspan 빌드
+                const spanInfo = rowspans[index];
+                const largeCellHtml = spanInfo.large > 0 
+                    ? `<td rowspan="${spanInfo.large}" style="font-size: 11px; font-weight: bold; background-color: #f8fafc; border: 1px solid #cbd5e0; padding: 10px; vertical-align: middle; text-align: center; color: #4a5568;">${evalItem.large_item || '-'}</td>` 
+                    : '';
+                const smallCellHtml = spanInfo.small > 0 
+                    ? `<td rowspan="${spanInfo.small}" style="font-size: 11px; background-color: #ffffff; border: 1px solid #cbd5e0; padding: 10px; vertical-align: middle; text-align: center; color: #4a5568;">${evalItem.small_item || '-'}</td>` 
+                    : '';
+
+                // 결과 셀 뱃지 스타일
+                let statusStyle = '';
+                if (statusVal === 'Y') {
+                    statusStyle = 'background-color: #e6fffa; color: #234e52; font-weight: bold; text-align: center;';
+                } else if (statusVal === 'N') {
+                    statusStyle = 'background-color: #fff5f5; color: #742a2a; font-weight: bold; text-align: center;';
+                } else if (statusVal) {
+                    statusStyle = 'font-weight: bold; text-align: center; color: #2b6cb0;';
+                }
+
+                html += `
+                    <tr style="height: auto; background-color: ${index % 2 === 0 ? '#ffffff' : '#fcfdfd'};">
+                        <td style="background-color: #f1f5f9; text-align: center; color: #718096; border: 1px solid #cbd5e0; font-size: 11px; vertical-align: middle;">${excelRowIndex}</td>
+                        ${largeCellHtml}
+                        ${smallCellHtml}
+                        <td style="border: 1px solid #cbd5e0; padding: 10px; vertical-align: middle; line-height: 1.5; color: #2d3748; white-space: normal;">
+                            ${evalItem.standard || '-'}
+                        </td>
+                        <td style="border: 1px solid #cbd5e0; padding: 10px; vertical-align: middle; line-height: 1.4; color: #4a5568; white-space: pre-wrap;">
+                            ${evalItem.compliance_criteria || '-'}
+                        </td>
+                        <td style="border: 1px solid #cbd5e0; padding: 8px; vertical-align: middle; ${statusStyle}">
+                            ${statusVal}
+                        </td>
+                        <td style="border: 1px solid #cbd5e0; padding: 10px; vertical-align: middle; line-height: 1.4; color: #718096; white-space: normal;">
+                            ${commentVal || '-'}
+                        </td>
+                    </tr>
+                `;
+                excelRowIndex++;
+            });
+
+            // 122~123행 하단 정보
+            const evalDate = new Date(report.created_at);
+            const dateStr = !isNaN(evalDate.getTime()) ? `${evalDate.getFullYear()}년 ${evalDate.getMonth() + 1}월 ${evalDate.getDate()}일` : '';
+
+            html += `
+                            <!-- 심사 기간 행 -->
+                            <tr style="height: 35px;">
+                                <td style="background-color: #f1f5f9; text-align: center; color: #718096; border: 1px solid #cbd5e0; font-size: 11px; vertical-align: middle;">${excelRowIndex}</td>
+                                <td colspan="6" style="border: 1px solid #cbd5e0; padding: 8px 12px; font-weight: bold; background-color: #f8fafc; color: #2d3748; vertical-align: middle;">
+                                    인증심사기간 : ${dateStr}
+                                </td>
+                            </tr>
+                            <!-- 심사원 행 -->
+                            <tr style="height: 35px;">
+                                <td style="background-color: #f1f5f9; text-align: center; color: #718096; border: 1px solid #cbd5e0; font-size: 11px; vertical-align: middle;">${excelRowIndex + 1}</td>
+                                <td colspan="6" style="border: 1px solid #cbd5e0; padding: 8px 12px; font-weight: bold; background-color: #f8fafc; color: #2d3748; vertical-align: middle;">
+                                    인증심사원 : ${getEvaluatorName(report.evaluator_id)}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            return html;
         }
     </script>
 </body>
