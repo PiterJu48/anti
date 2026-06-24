@@ -1696,10 +1696,10 @@
             });
 
             const scoreA = groupA_max > 0 ? Math.round((groupA_earned / groupA_max) * 100) : 0;
-            const scoreB = groupB_max > 0 ? Math.round((groupB_earned / groupB_max) * 100) : 0;
+            const scoreB = groupB_earned;
             
             // 최종 합격/불합격 판정
-            const isGroupAPass = scoreA >= 85;
+            const isGroupAPass = scoreA >= 80;
             const isGroupBPass = scoreB >= 25;
             const isYNPass = nonCompliantYNItems.length === 0;
             const finalPassed = isGroupAPass && isGroupBPass && isYNPass;
@@ -1777,7 +1777,7 @@
                             <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
                                 <div style="font-size: 0.85rem; color: #718096; font-weight: 600; margin-bottom: 4px;">일반 환경 점수 (A그룹)</div>
                                 <div style="font-size: 1.2rem; font-weight: 700; color: ${isGroupAPass ? '#2c7a7b' : '#e53e3e'};">
-                                    ${scoreA}점 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 85점 이상</span>
+                                    ${scoreA}점 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 80점 이상</span>
                                 </div>
                                 <span style="font-size: 0.75rem; font-weight: 600; color: ${isGroupAPass ? '#2c7a7b' : '#e53e3e'}; display: inline-block; margin-top: 4px;">
                                     ${isGroupAPass ? '● 통과' : '● 탈락'}
@@ -1786,7 +1786,7 @@
                             <div style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; text-align: center;">
                                 <div style="font-size: 0.85rem; color: #718096; font-weight: 600; margin-bottom: 4px;">소 상태 평가 점수 (B그룹)</div>
                                 <div style="font-size: 1.2rem; font-weight: 700; color: ${isGroupBPass ? '#2c7a7b' : '#e53e3e'};">
-                                    ${scoreB}점 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 25점 이상</span>
+                                    ${scoreB}점 <span style="font-size: 0.85rem; font-weight: 500; color: #718096;">/ 기준 25점 이상 (35점 만점)</span>
                                 </div>
                                 <span style="font-size: 0.75rem; font-weight: 600; color: ${isGroupBPass ? '#2c7a7b' : '#e53e3e'}; display: inline-block; margin-top: 4px;">
                                     ${isGroupBPass ? '● 통과' : '● 탈락'}
@@ -1807,8 +1807,8 @@
                             <div style="background: #fffaf0; border: 1px solid #feebc8; border-radius: 6px; padding: 12px; margin-top: 15px; text-align: left;">
                                 <h5 style="margin: 0 0 8px 0; color: #dd6b20; font-size: 0.9rem;"><i class="fas fa-exclamation-triangle"></i> 부적합 판단 근거 상세 사유</h5>
                                 <ul style="margin: 0; padding-left: 20px; font-size: 0.85rem; color: #7b341e; line-height: 1.6;">
-                                    ${!isGroupAPass ? `<li>일반 사육환경 영역(A그룹)의 합계점수 비율이 85점 미만입니다. (현재: <strong>${scoreA}점</strong>)</li>` : ''}
-                                    ${!isGroupBPass ? `<li>소의 상태 평가 영역(B그룹)의 합계점수 비율이 25점 미만입니다. (현재: <strong>${scoreB}점</strong>)</li>` : ''}
+                                    ${!isGroupAPass ? `<li>일반 사육환경 영역(A그룹)의 합계점수 비율이 80점 미만입니다. (현재: <strong>${scoreA}점</strong>)</li>` : ''}
+                                    ${!isGroupBPass ? `<li>소의 상태 평가 영역(B그룹)의 점수가 25점 미만입니다. (현재: <strong>${scoreB}점</strong> / 35점 만점)</li>` : ''}
                                     ${!isYNPass ? `
                                         <li>필수 적부 항목 중 <strong>부적합(N)</strong> 판정된 항목이 존재합니다 (${nonCompliantYNItems.length}건):
                                             <ul style="margin: 4px 0; padding-left: 15px; color: #9c4221; font-size: 0.8rem; list-style-type: circle;">

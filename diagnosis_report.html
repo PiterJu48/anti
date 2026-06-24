@@ -195,10 +195,10 @@
                                 </div>
                                 <div style="text-align: left;">
                                     <div style="font-weight: 700; color: #1e293b;">소의 상태</div>
-                                    <div style="font-size: 0.75rem; color: #64748b;">(25점 이상)</div>
+                                    <div style="font-size: 0.75rem; color: #64748b;">(35점 중 25점 이상)</div>
                                 </div>
                             </td>
-                            <td style="padding: 15px 12px; font-weight: 600; color: #475569;">25점 이상</td>
+                            <td style="padding: 15px 12px; font-weight: 600; color: #475569;">35점 중 25점 이상</td>
                             <td id="summaryScoreB" style="padding: 15px 12px; font-weight: 700;">-</td>
                             <td id="summaryNonB" style="padding: 15px 12px; font-weight: 700;">-</td>
                             <td style="padding: 15px 12px;" id="summaryResultB">-</td>
@@ -547,7 +547,7 @@
             });
 
             const scoreA = groupA_max > 0 ? Math.round((groupA_earned / groupA_max) * 100) : 0;
-            const scoreB = groupB_max > 0 ? Math.round((groupB_earned / groupB_max) * 100) : 0;
+            const scoreB = groupB_earned;
 
             const isGroupAPass = scoreA >= 80;
             const isGroupBPass = scoreB >= 25;
@@ -571,7 +571,7 @@
 
             // 소의 상태 (B그룹)
             const sumScoreB = document.getElementById('summaryScoreB');
-            sumScoreB.innerText = `${scoreB}점`;
+            sumScoreB.innerText = `${scoreB}점 / 35점`;
             sumScoreB.style.color = isGroupBPass ? '#2c7a7b' : '#c53030';
             
             const sumNonB = document.getElementById('summaryNonB');

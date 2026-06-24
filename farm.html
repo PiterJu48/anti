@@ -116,8 +116,8 @@
                                     <span id="latestGroupAScore" style="font-weight: 700;">0점 / 기준 80점</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 6px;">
-                                    <span>소의 상태(25점 이상)</span>
-                                    <span id="latestGroupBScore" style="font-weight: 700;">0점 / 기준 25점</span>
+                                    <span>소의 상태(35점 중 25점 이상)</span>
+                                    <span id="latestGroupBScore" style="font-weight: 700;">0점 / 기준 25점 (35점 만점)</span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px;">
                                     <span>필수 적부 부적합</span>
@@ -485,7 +485,7 @@
                 });
 
                 const scoreA = groupA_max > 0 ? Math.round((groupA_earned / groupA_max) * 100) : 0;
-                const scoreB = groupB_max > 0 ? Math.round((groupB_earned / groupB_max) * 100) : 0;
+                const scoreB = groupB_earned;
 
                 const isGroupAPass = scoreA >= 80;
                 const isGroupBPass = scoreB >= 25;
@@ -515,8 +515,8 @@
                     card.style.background = '#fff5f5';
                 }
 
-                document.getElementById('latestGroupAScore').innerHTML = `${scoreA}점 <span style="font-weight: 600; font-size: 0.75rem; color: ${isGroupAPass ? '#2c7a7b' : '#c53030'};">${isGroupAPass ? '● 통과' : '● 미달'}</span>`;
-                document.getElementById('latestGroupBScore').innerHTML = `${scoreB}점 <span style="font-weight: 600; font-size: 0.75rem; color: ${isGroupBPass ? '#2c7a7b' : '#c53030'};">${isGroupBPass ? '● 통과' : '● 미달'}</span>`;
+                document.getElementById('latestGroupAScore').innerHTML = `${scoreA}점 / 기준 80점 <span style="font-weight: 600; font-size: 0.75rem; color: ${isGroupAPass ? '#2c7a7b' : '#c53030'};">${isGroupAPass ? '● 통과' : '● 미달'}</span>`;
+                document.getElementById('latestGroupBScore').innerHTML = `${scoreB}점 / 기준 25점 (35점 만점) <span style="font-weight: 600; font-size: 0.75rem; color: ${isGroupBPass ? '#2c7a7b' : '#c53030'};">${isGroupBPass ? '● 통과' : '● 미달'}</span>`;
                 document.getElementById('latestYNCount').innerHTML = `${nonCompliantYNCount}개 <span style="font-weight: 600; font-size: 0.75rem; color: ${isYNPass ? '#2c7a7b' : '#c53030'};">${isYNPass ? '● 통과' : '● 미달'}</span>`;
 
                 // 취약점 목록 렌더링
