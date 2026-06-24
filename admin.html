@@ -396,6 +396,7 @@
                                     <th>심사유형</th>
                                     <th>평가자</th>
                                     <th>점수</th>
+                                    <th>판정 결과</th>
                                     <th>제출일시</th>
                                     <th>관리</th>
                                 </tr>
@@ -1379,6 +1380,21 @@
 
         // 평가 결과 데이터 로드
         async function fetchResults() {
+            // 평가 항목 정보가 캐싱되어 있지 않다면 한 번 로드
+            if (!window.evaluationItemsMap) {
+                const { data: items, error: itemsError } = await db
+                    .from('evaluation_items')
+                    .select('id, section, compliance_criteria');
+                if (!itemsError && items) {
+                    window.evaluationItemsMap = {};
+                    items.forEach(item => {
+                        window.evaluationItemsMap[item.id] = item;
+                    });
+                } else {
+                    console.error('평가 항목 로드 실패:', itemsError);
+                }
+            }
+
             // farms 테이블에서 대표자(농장주명) 및 remarks(심사유형 파싱용)를 포함해서 로드
             const { data, error } = await db
                 .from('evaluation_reports')
@@ -1513,12 +1529,105 @@
                 } catch (e) {}
                 const auditType = farmRemarks.audit_type || '-';
 
+                // 판정기준 실시간 계산
+                let isPass = false;
+                if (window.evaluationItemsMap && report.details) {
+                    let groupA_earned = 0;
+                    let groupA_max = 0;
+                    let groupB_earned = 0;
+                    let groupB_max = 0;
+                    let nonCompliantYNCount = 0;
+
+                    Object.keys(report.details).forEach(key => {
+                        const status = report.details[key];
+                        if (status === null || status === 'N/A' || status === 'NA') return;
+
+                        const item = window.evaluationItemsMap[key];
+                        if (!item) return;
+
+                        const isGroupA = [
+                            '□ 일반기준',
+                            '□ 사양관리 방법',
+                            '□ 사육시설 및 환경',
+                            '□ 동물복지형 자유방목(추가 사항)',
+                            '□ 동물복지형 자유방목 (추가사항)'
+                        ].includes(item.section);
+
+                        const isGroupB = (item.section === '□ 소의 상태 평가');
+
+                        // 옵션 파싱
+                        const parseOptionsLocal = (criteriaText) => {
+                            if (!criteriaText || criteriaText.trim() === "") {
+                                return [{ value: "Y" }, { value: "N" }];
+                            }
+                            return criteriaText.split('\n').map(line => {
+                                const trimmed = line.trim();
+                                if (!trimmed) return null;
+                                let val = trimmed;
+                                if (trimmed.includes(':')) {
+                                    val = trimmed.split(':')[0].trim();
+                                }
+                                return { value: val };
+                            }).filter(o => o !== null);
+                        };
+
+                        const options = parseOptionsLocal(item.compliance_criteria);
+                        const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+
+                        if (numericValues.length > 0) {
+                            const maxVal = Math.max(...numericValues);
+                            let earnedVal = parseFloat(status);
+                            if (isNaN(earnedVal)) earnedVal = 0;
+
+                            if (isGroupA) {
+                                groupA_earned += earnedVal;
+                                groupA_max += maxVal;
+                            } else if (isGroupB) {
+                                groupB_earned += earnedVal;
+                                groupB_max += maxVal;
+                            }
+                        } else {
+                            let earnedVal = 0;
+                            let maxVal = 1;
+                            if (status === 'Y') {
+                                earnedVal = 1;
+                            } else if (status === 'N') {
+                                nonCompliantYNCount++;
+                            }
+
+                            if (isGroupA) {
+                                groupA_earned += earnedVal;
+                                groupA_max += maxVal;
+                            } else if (isGroupB) {
+                                groupB_earned += earnedVal;
+                                groupB_max += maxVal;
+                            }
+                        }
+                    });
+
+                    const scoreA = groupA_max > 0 ? Math.round((groupA_earned / groupA_max) * 100) : 0;
+                    const scoreB = groupB_earned;
+
+                    const isGroupAPass = scoreA >= 80;
+                    const isGroupBPass = scoreB >= 25;
+                    const isYNPass = nonCompliantYNCount === 0;
+
+                    isPass = isGroupAPass && isGroupBPass && isYNPass;
+                } else {
+                    isPass = report.score >= 80; 
+                }
+
+                const passBadge = isPass 
+                    ? `<span class="status-badge" style="background-color: #2c7a7b; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold;">인증 적합</span>`
+                    : `<span class="status-badge" style="background-color: #e53e3e; color: white; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold;">인증 부적합</span>`;
+
                 return `
                     <tr>
                         <td>${report.farms ? report.farms.name : '알 수 없음'}</td>
                         <td><span class="status-badge status-process" style="font-size: 0.75rem;">${auditType}</span></td>
                         <td>${getEvaluatorName(report.evaluator_id)}</td>
                         <td><span style="font-weight: bold; color: ${report.score >= 80 ? '#2c7a7b' : '#e53e3e'}">${report.score}점</span></td>
+                        <td>${passBadge}</td>
                         <td>${new Date(report.created_at).toLocaleString()}</td>
                         <td>
                             <button class="logout-btn" style="padding: 4px 8px; color: var(--primary-color); border-color: var(--primary-color);" onclick="viewReportDetail(${report.id})">바로보기</button>
