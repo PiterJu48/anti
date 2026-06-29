@@ -110,6 +110,7 @@
                                     -
                                 </span>
                             </div>
+                            <p id="latestSuitabilityDesc" style="font-size: 0.85rem; color: #4a5568; text-align: center; margin-top: -5px; margin-bottom: 15px; font-weight: 500;"></p>
                             <div style="display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem; color: #4a5568;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 6px;">
                                     <span>관리·시설(80점 이상)</span>
@@ -170,9 +171,9 @@
                     <!-- 취약점 체크 리스트 카드 -->
                     <div class="card" style="padding: 25px; border-left: 5px solid #e53e3e; background: #fff5f5;">
                         <h4 style="margin: 0 0 10px 0; color: #c53030; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
-                            <i class="fas fa-exclamation-triangle"></i> 우리 농장 취약점(부적합 항목 리스트)
+                            <i class="fas fa-exclamation-triangle"></i> 우리 농장 부적합 및 취약 항목 리스트
                         </h4>
-                        <p style="font-size: 0.85rem; color: #9b2c2c; margin-bottom: 15px;">부적합으로 진단된 다음 항목들에 대해 즉각적인 개선 및 보완을 권장합니다.</p>
+                        <p style="font-size: 0.85rem; color: #9b2c2c; margin-bottom: 15px;">진단 결과 부적합(N) 혹은 점수 미달(취약)로 판정된 다음 항목들에 대해 보완을 권장합니다.</p>
                         <div id="latestWeaknessList" style="display: flex; flex-direction: column; gap: 10px;">
                             <!-- 동적 로드 -->
                         </div>
@@ -190,9 +191,10 @@
                             <thead>
                                 <tr>
                                     <th>진단 일시</th>
-                                    <th>점수</th>
-                                    <th>적합</th>
-                                    <th>부적합</th>
+                                    <th>일반 환경 점수 (A그룹)</th>
+                                    <th>소 상태 평가 점수 (B그룹)</th>
+                                    <th>총 부적합(N) 개수</th>
+                                    <th>총점</th>
                                     <th>상세</th>
                                 </tr>
                             </thead>
@@ -451,12 +453,18 @@
                         if (earnedVal === maxVal) {
                             sectionStats[item.section].compliant++;
                         } else {
-                            weaknessItems.push({
-                                section: item.section,
-                                large_item: item.large_item,
-                                small_item: item.small_item,
-                                standard: item.standard
-                            });
+                            // 점수형 문항 중 획득한 점수가 배점의 평균값 이하인 경우 취약 항목으로 추가
+                            const halfMax = maxVal / 2;
+                            if (earnedVal <= halfMax) {
+                                weaknessItems.push({
+                                    type: 'weak',
+                                    section: item.section,
+                                    large_item: item.large_item,
+                                    small_item: item.small_item,
+                                    standard: item.standard,
+                                    scoreInfo: `(배점: ${maxVal}점 / 획득: ${earnedVal}점)`
+                                });
+                            }
                         }
                     } else {
                         maxVal = 1;
@@ -474,7 +482,9 @@
                             sectionStats[item.section].compliant++;
                         } else {
                             nonCompliantYNCount++;
+                            // Y/N 적부 문항 중 N으로 판정된 건은 부적합 항목으로 추가
                             weaknessItems.push({
+                                type: 'non_compliant',
                                 section: item.section,
                                 large_item: item.large_item,
                                 small_item: item.small_item,
@@ -501,18 +511,27 @@
                 // 인증 기준 심사 예측 정보 바인딩
                 const badge = document.getElementById('latestSuitabilityBadge');
                 const card = document.getElementById('suitabilityCard');
+                const desc = document.getElementById('latestSuitabilityDesc');
                 if (finalPassed) {
                     badge.innerText = '인증 적합 (통과)';
                     badge.style.background = '#2c7a7b';
                     badge.style.color = '#ffffff';
                     card.style.borderColor = '#2c7a7b';
                     card.style.background = '#e6fffa';
+                    if (desc) {
+                        desc.innerText = '현재 동물복지 수준이 인증기준을 충족하고 있습니다.';
+                        desc.style.color = '#2c7a7b';
+                    }
                 } else {
                     badge.innerText = '인증 부적합 (미달)';
                     badge.style.background = '#e53e3e';
                     badge.style.color = '#ffffff';
                     card.style.borderColor = '#e53e3e';
                     card.style.background = '#fff5f5';
+                    if (desc) {
+                        desc.innerText = '인증기준 충족을 위해 일부 항목의 개선이 필요합니다.';
+                        desc.style.color = '#c53030';
+                    }
                 }
 
                 document.getElementById('latestGroupAScore').innerHTML = `${scoreA}점 / 기준 80점 <span style="font-weight: 600; font-size: 0.75rem; color: ${isGroupAPass ? '#2c7a7b' : '#c53030'};">${isGroupAPass ? '● 통과' : '● 미달'}</span>`;
@@ -524,15 +543,23 @@
                 if (weaknessItems.length === 0) {
                     weaknessList.innerHTML = '<div style="color: #2c7a7b; font-weight: 600; font-size: 0.9rem; padding: 10px; background: #e6fffa; border: 1px solid #b2f5ea; border-radius: 4px;">모든 항목이 적합합니다! 우수한 복지 수준을 유지하고 있습니다.</div>';
                 } else {
-                    weaknessList.innerHTML = weaknessItems.map(item => `
-                        <div style="background: white; border: 1px solid #fed7d7; border-radius: 4px; padding: 10px 15px; font-size: 0.85rem; color: #4a5568; line-height: 1.5; display: flex; align-items: flex-start; gap: 8px;">
-                            <span style="display: inline-block; background: #c53030; color: white; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; border-radius: 3px; margin-top: 1px;">부적합</span>
-                            <div>
-                                <strong style="color: #2d3748;">[${item.section} > ${item.large_item}${item.small_item ? ' - ' + item.small_item : ''}]</strong>
-                                <div style="margin-top: 3px; color: #4a5568;">${item.standard}</div>
+                    weaknessList.innerHTML = weaknessItems.map(item => {
+                        const isWeak = item.type === 'weak';
+                        const badgeText = isWeak ? '취약' : '부적합';
+                        const badgeColor = isWeak ? '#dd6b20' : '#c53030';
+                        const borderStyle = isWeak ? '1px solid #feebc8' : '1px solid #fed7d7';
+                        const scoreDisplay = isWeak ? ` <span style="font-weight: 600; color: #dd6b20; font-size: 0.8rem;">${item.scoreInfo}</span>` : '';
+                        
+                        return `
+                            <div style="background: white; border: ${borderStyle}; border-radius: 4px; padding: 10px 15px; font-size: 0.85rem; color: #4a5568; line-height: 1.5; display: flex; align-items: flex-start; gap: 8px;">
+                                <span style="display: inline-block; background: ${badgeColor}; color: white; padding: 2px 6px; font-size: 0.75rem; font-weight: 700; border-radius: 3px; margin-top: 1px; flex-shrink: 0;">${badgeText}</span>
+                                <div>
+                                    <strong style="color: #2d3748;">[${item.section} > ${item.large_item}${item.small_item ? ' - ' + item.small_item : ''}]</strong>${scoreDisplay}
+                                    <div style="margin-top: 3px; color: #4a5568;">${item.standard}</div>
+                                </div>
                             </div>
-                        </div>
-                    `).join('');
+                        `;
+                    }).join('');
                 }
 
                 // 5. 전체 평가 데이터 조회 및 통계 산출 (전국평균, 상위 30% 평균)
@@ -758,23 +785,142 @@
 
         async function fetchDiagnosisHistory() {
             const userId = localStorage.getItem('user_id');
-            const { data, error } = await db.from('diagnosis_results')
-                .select('*')
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false });
             
-            if (error) return console.error(error);
+            try {
+                // 평가 항목 리스트 사전 로드 (A/B그룹 판정용)
+                const { data: rawItems, error: itemsError } = await db.from('evaluation_items').select('id, section, compliance_criteria');
+                if (itemsError) throw itemsError;
 
-            const list = document.getElementById('diagnosisHistoryList');
-            list.innerHTML = data.map(item => `
-                <tr>
-                    <td>${new Date(item.created_at).toLocaleString()}</td>
-                    <td style="font-weight: 700; color: var(--primary-color);">${item.score}%</td>
-                    <td style="color: #2c7a7b;">${item.compliant_count}</td>
-                    <td style="color: #c53030;">${item.non_compliant_count}</td>
-                    <td><button class="logout-btn" style="padding: 4px 10px;" onclick="window.open('diagnosis_report.html?id=${item.id}', '_blank', 'width=1000,height=800')">보기</button></td>
-                </tr>
-            `).join('') || '<tr><td colspan="5" style="text-align:center; padding:20px;">진단 이력이 없습니다.</td></tr>';
+                // 섹션 설정 로드 및 비활성 필터링
+                const { data: configs, error: configError } = await db.from('section_configs').select('*');
+                const inactiveKeywords = configError ? [] : configs.filter(c => !c.is_active).map(c => c.section_name);
+                const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
+
+                const filteredItems = rawItems.filter(item => {
+                    const itemSectClean = cleanSect(item.section || "");
+                    return !inactiveKeywords.some(keyword => itemSectClean.includes(keyword));
+                });
+
+                const itemMap = filteredItems.reduce((acc, it) => {
+                    acc[it.id] = it;
+                    return acc;
+                }, {});
+
+                const { data, error } = await db.from('diagnosis_results')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+
+                const list = document.getElementById('diagnosisHistoryList');
+                if (list) {
+                    list.innerHTML = data.map(item => {
+                        let rawDetails = item.details || {};
+                        if (typeof rawDetails === 'string') {
+                            try { rawDetails = JSON.parse(rawDetails); } catch (e) { rawDetails = {}; }
+                        }
+
+                        let details = {};
+                        if (Array.isArray(rawDetails)) {
+                            rawDetails.forEach(d => {
+                                details[d.orig_id] = d.status;
+                            });
+                        } else {
+                            details = rawDetails;
+                        }
+
+                        let groupA_earned = 0;
+                        let groupA_max = 0;
+                        let groupB_earned = 0;
+                        let groupB_max = 0;
+                        let nonCompliantYNCount = 0;
+
+                        Object.keys(details).forEach(itemId => {
+                            const status = details[itemId];
+                            if (!status || status === 'N/A' || status === 'NA') return;
+
+                            const originItem = itemMap[itemId];
+                            if (!originItem) return;
+
+                            const isGroupA = [
+                                '□ 일반기준',
+                                '□ 사양관리 방법',
+                                '□ 사육시설 및 환경',
+                                '□ 동물복지형 자유방목(추가 사항)',
+                                '□ 동물복지형 자유방목 (추가사항)'
+                            ].includes(originItem.section);
+
+                            const isGroupB = (originItem.section === '□ 소의 상태 평가');
+
+                            // 옵션 파싱
+                            const parseOptionsLocal = (criteriaText) => {
+                                if (!criteriaText || criteriaText.trim() === "") {
+                                    return [{ value: "Y" }, { value: "N" }];
+                                }
+                                return criteriaText.split('\n').map(line => {
+                                    const trimmed = line.trim();
+                                    if (!trimmed) return null;
+                                    let val = trimmed;
+                                    if (trimmed.includes(':')) {
+                                        val = trimmed.split(':')[0].trim();
+                                    }
+                                    return { value: val };
+                                }).filter(o => o !== null);
+                            };
+
+                            const options = parseOptionsLocal(originItem.compliance_criteria);
+                            const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+
+                            if (numericValues.length > 0) {
+                                const maxVal = Math.max(...numericValues);
+                                let earnedVal = parseFloat(status);
+                                if (isNaN(earnedVal)) earnedVal = 0;
+
+                                if (isGroupA) {
+                                    groupA_earned += earnedVal;
+                                    groupA_max += maxVal;
+                                    if (earnedVal !== maxVal) nonCompliantYNCount++;
+                                } else if (isGroupB) {
+                                    groupB_earned += earnedVal;
+                                    groupB_max += maxVal;
+                                    if (earnedVal !== maxVal) nonCompliantYNCount++;
+                                }
+                            } else {
+                                const trimmedStatus = String(status).trim();
+                                const maxVal = 1;
+                                let earnedVal = trimmedStatus.startsWith('Y') ? 1 : 0;
+
+                                if (isGroupA) {
+                                    groupA_earned += earnedVal;
+                                    groupA_max += maxVal;
+                                    if (!trimmedStatus.startsWith('Y')) nonCompliantYNCount++;
+                                } else if (isGroupB) {
+                                    groupB_earned += earnedVal;
+                                    groupB_max += maxVal;
+                                    if (!trimmedStatus.startsWith('Y')) nonCompliantYNCount++;
+                                }
+                            }
+                        });
+
+                        const scoreA = groupA_max > 0 ? Math.round((groupA_earned / groupA_max) * 100) : 0;
+                        const scoreB = groupB_earned;
+
+                        return `
+                            <tr>
+                                <td>${new Date(item.created_at).toLocaleString()}</td>
+                                <td style="font-weight: 500; color: #2c7a7b;">${scoreA}점</td>
+                                <td style="font-weight: 500; color: #2b6cb0;">${scoreB}점</td>
+                                <td style="font-weight: 500; color: ${nonCompliantYNCount > 0 ? '#e53e3e' : '#4a5568'};">${nonCompliantYNCount}개</td>
+                                <td style="font-weight: 700; color: var(--primary-color);">${item.score}%</td>
+                                <td><button class="logout-btn" style="padding: 4px 10px;" onclick="window.open('diagnosis_report.html?id=${item.id}', '_blank', 'width=1000,height=800')">보기</button></td>
+                            </tr>
+                        `;
+                    }).join('') || '<tr><td colspan="6" style="text-align:center; padding:20px;">진단 이력이 없습니다.</td></tr>';
+                }
+            } catch (err) {
+                console.error('Error fetching history:', err);
+            }
         }
 
         function resetDiagnosis() {
@@ -1085,7 +1231,7 @@
                         return group.items.map(item => {
                             const options = parseOptions(item.compliance_criteria);
                             const hasParentheses = item.section && item.section.includes('(') && item.section.includes(')');
-                            const isSpecialItem = item.small_item === '조명' || item.small_item === '공기 오염도';
+                            const isSpecialItem = item.small_item === '조명' || item.small_item === '공기 오염도' || item.id === 2383;
                             return `
                             <div class="card" style="margin-bottom: 15px; padding: 20px; border: 1px solid #edf2f7;">
                                 <div class="eval-item-row" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap;">
@@ -1113,22 +1259,24 @@
                                                                 `;
                                                             }).join('')}
                                                         </div>
-                                                        <div style="font-weight: 600; font-size: 0.85rem; color: #2c7a7b; margin-bottom: 6px;">
-                                                            휴식공간 실측치 (50 이하 적합 / 50 초과 1개라도 있으면 부적합)
-                                                        </div>
-                                                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                                                            ${[5, 6, 7, 8, 9].map(idx => {
-                                                                const val = (item.eval_measurements && item.eval_measurements[idx] !== undefined) ? item.eval_measurements[idx] : '';
-                                                                return `
-                                                                    <input type="number" step="any" placeholder="값 ${idx - 4}" 
-                                                                        value="${val}" 
-                                                                        oninput="updateMeasurement(${item.id}, ${idx}, this.value)" 
-                                                                        style="width: 18%; padding: 6px; font-size: 0.8rem; border: 1px solid #cbd5e0; border-radius: 4px; box-sizing: border-box; min-width: 60px;">
-                                                                `;
-                                                            }).join('')}
+                                                        <div style="margin-bottom: 15px;">
+                                                            <div style="font-weight: 600; font-size: 0.85rem; color: #dd6b20; margin-bottom: 6px;">
+                                                                휴식공간 실측치 (50 이하 적합 / 50 초과 1개라도 있으면 부적합)
+                                                            </div>
+                                                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                                                ${[5, 6, 7, 8, 9].map(idx => {
+                                                                    const val = (item.eval_measurements && item.eval_measurements[idx] !== undefined) ? item.eval_measurements[idx] : '';
+                                                                    return `
+                                                                        <input type="number" step="any" placeholder="값 ${idx - 4}" 
+                                                                            value="${val}" 
+                                                                            oninput="updateMeasurement(${item.id}, ${idx}, this.value)" 
+                                                                            style="width: 18%; padding: 6px; font-size: 0.8rem; border: 1px solid #cbd5e0; border-radius: 4px; box-sizing: border-box; min-width: 60px;">
+                                                                    `;
+                                                                }).join('')}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                ` : `
+                                                ` : (item.small_item === '공기 오염도' ? `
                                                     <!-- 공기 오염도 전용 5개 입력 UI -->
                                                     <div style="margin-bottom: 15px;">
                                                         <div style="font-weight: 600; font-size: 0.85rem; color: #2c7a7b; margin-bottom: 6px;">
@@ -1146,24 +1294,24 @@
                                                             }).join('')}
                                                         </div>
                                                     </div>
-                                                `}
+                                                ` : '')}
                                                 <div id="calc_result_${item.id}" style="font-size: 0.85rem; font-weight: 600; color: #4a5568; margin-top: 10px; padding-top: 10px; border-top: 1px solid #edf2f7;">
                                                     ${calculateSpecialResultText(item)}
                                                 </div>
                                             </div>
                                         ` : ''}
                                         
+                                        ${isSpecialItem ? '' : `
                                         <div style="display: flex; flex-direction: column; gap: 8px; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #edf2f7; margin-bottom: 10px;">
                                             ${options.map(opt => `
-                                                <label style="cursor: ${isSpecialItem ? 'default' : 'pointer'}; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #4a5568;">
+                                                <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #4a5568;">
                                                     <input type="radio" name="item_${item.id}" value="${opt.value}" required 
                                                         ${item.eval_value === opt.value ? 'checked' : ''} 
-                                                        ${isSpecialItem ? 'disabled' : ''}
                                                         onchange="saveItemValue(${item.id}, '${opt.value}')" style="margin-top: 4px;"> 
                                                     <span>${opt.label}</span>
                                                 </label>
                                             `).join('')}
-                                            ${hasParentheses && !isSpecialItem ? `
+                                            ${hasParentheses ? `
                                                 <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #718096; font-weight: 500; border-top: 1px dashed #e2e8f0; padding-top: 8px; margin-top: 4px;">
                                                     <input type="radio" name="item_${item.id}" value="N/A" 
                                                         ${item.eval_value === 'N/A' || item.eval_value === null ? 'checked' : ''} 
@@ -1172,6 +1320,7 @@
                                                 </label>
                                             ` : ''}
                                         </div>
+                                        `}
                                         <input type="text" id="comm_${item.id}" placeholder="평가 의견 입력" 
                                             value="${item.eval_comment || ''}" 
                                             ${isSpecialItem ? 'readonly style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem; border-radius: 4px; background: #f1f5f9; color: #4a5568; box-sizing: border-box;"' : 'style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem; border-radius: 4px; box-sizing: border-box;"'}
@@ -1557,6 +1706,25 @@
                 });
 
                 if (item.eval_value === null || item.eval_value === 'N/A') {
+                    return;
+                }
+
+                // 중복 반영 방지: 하위 10개 기록 항목(2384~2393)은 점수 합산에서 제외(2383 대항목에 합계 점수가 반영됨)
+                const recordSubIds = [2384, 2385, 2386, 2387, 2388, 2389, 2390, 2391, 2392, 2393];
+                if (recordSubIds.includes(item.id)) {
+                    return;
+                }
+
+                // 만약 2383 기록 합산 문항이라면 10점 만점의 점수항목으로 계산 처리
+                if (item.id === 2383) {
+                    const earnedVal = parseFloat(item.eval_value) || 0;
+                    earnedPoints += earnedVal;
+                    maxPoints += 10;
+                    if (earnedVal === 10) {
+                        compliantCount++;
+                    } else {
+                        nonCompliantCount++;
+                    }
                     return;
                 }
 

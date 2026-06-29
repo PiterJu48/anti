@@ -1532,14 +1532,22 @@
                 // 판정기준 실시간 계산
                 let isPass = false;
                 if (window.evaluationItemsMap && report.details) {
+                    // details가 배열인지 객체인지 판별하여 정규화된 키-값 순회
+                    let detailsList = [];
+                    if (Array.isArray(report.details)) {
+                        detailsList = report.details.map(d => ({ key: d.orig_id, status: d.status }));
+                    } else {
+                        detailsList = Object.keys(report.details).map(k => ({ key: parseInt(k), status: report.details[k] }));
+                    }
                     let groupA_earned = 0;
                     let groupA_max = 0;
                     let groupB_earned = 0;
                     let groupB_max = 0;
                     let nonCompliantYNCount = 0;
 
-                    Object.keys(report.details).forEach(key => {
-                        const status = report.details[key];
+                    detailsList.forEach(detailItem => {
+                        const key = detailItem.key;
+                        const status = detailItem.status;
                         if (status === null || status === 'N/A' || status === 'NA') return;
 
                         const item = window.evaluationItemsMap[key];
@@ -1589,9 +1597,9 @@
                         } else {
                             let earnedVal = 0;
                             let maxVal = 1;
-                            if (status === 'Y') {
+                            if (status && String(status).trim().startsWith('Y')) {
                                 earnedVal = 1;
-                            } else if (status === 'N') {
+                            } else if (status && String(status).trim().startsWith('N')) {
                                 nonCompliantYNCount++;
                             }
 
@@ -1760,7 +1768,8 @@
                     '□ 일반기준',
                     '□ 사양관리 방법',
                     '□ 사육시설 및 환경',
-                    '□ 동물복지형 자유방목(추가 사항)'
+                    '□ 동물복지형 자유방목(추가 사항)',
+                    '□ 동물복지형 자유방목 (추가사항)'
                 ].includes(section);
                 
                 const isGroupB = (section === '□ 소의 상태 평가');
@@ -1782,10 +1791,10 @@
                     // 적부형 문항
                     let earnedVal = 0;
                     let maxVal = 0;
-                    if (status === 'Y') {
+                    if (status && String(status).trim().startsWith('Y')) {
                         earnedVal = 1;
                         maxVal = 1;
-                    } else if (status === 'N') {
+                    } else if (status && String(status).trim().startsWith('N')) {
                         maxVal = 1;
                         nonCompliantYNItems.push({
                             standard: evalItem ? evalItem.standard : itemDetail.standard,
@@ -2156,6 +2165,44 @@
             if (window.editingReportDetailsMap[itemId]) {
                 if (type === 'status') {
                     window.editingReportDetailsMap[itemId].status = val === 'null' ? null : val;
+                    
+                    // 만약 기록 하위 문항(2384~2393) 중 하나가 변경되었다면 기록(2383) 문항 자동 재연산 트리거
+                    const recordSubIds = [2384, 2385, 2386, 2387, 2388, 2389, 2390, 2391, 2392, 2393];
+                    if (recordSubIds.includes(itemId)) {
+                        const recordDetail = window.editingReportDetailsMap[2383];
+                        if (recordDetail) {
+                            const subDetails = recordSubIds.map(subId => window.editingReportDetailsMap[subId]).filter(d => d);
+                            const answered = subDetails.filter(d => d.status !== null && d.status !== undefined && d.status !== '');
+                            if (answered.length < 10) {
+                                recordDetail.status = null;
+                                recordDetail.comment = `하위 10개 기록 항목 중 ${answered.length}개 입력됨 (10개 모두 입력 시 자동 합산됨)`;
+                            } else {
+                                const values = subDetails.map(d => parseFloat(d.status) || 0);
+                                const sum = values.reduce((a, b) => a + b, 0);
+                                recordDetail.status = String(sum);
+                                const hasZero = values.includes(0);
+                                if (hasZero) {
+                                    recordDetail.comment = `[자동 판정] 하위 10개 항목 합계: ${sum}점 (0점 항목 존재로 기록 불량 점수 반영)`;
+                                } else {
+                                    recordDetail.comment = `[자동 판정] 하위 10개 항목 합계: ${sum}점 (기록 보관 양호)`;
+                                }
+                            }
+                            
+                            // UI 요소를 찾아 업데이트
+                            const recordRow = document.getElementById(`edit_row_2383`);
+                            if (recordRow) {
+                                // status 및 comment 컬럼 업데이트
+                                const statusContainer = recordRow.querySelector('.status-cell-container');
+                                if (statusContainer) {
+                                    statusContainer.innerHTML = `<span style="font-weight: bold; color: #2c7a7b;">${recordDetail.status === null ? '입력 대기' : recordDetail.status + '점'}</span>`;
+                                }
+                                const commentInput = recordRow.querySelector('.comment-input-field');
+                                if (commentInput) {
+                                    commentInput.value = recordDetail.comment || '';
+                                }
+                            }
+                        }
+                    }
                 } else if (type === 'comment') {
                     window.editingReportDetailsMap[itemId].comment = val;
                 }
@@ -2211,28 +2258,37 @@
                 const options = parseOptions(item.compliance_criteria);
                 const isOptional = (item.section && item.section.includes('(추가 사항)')) || (item.large_item && item.large_item.includes('(추가 사항)'));
                 const hasParentheses = item.section && item.section.includes('(') && item.section.includes(')');
+                
+                const isRecordAutoSumItem = item.id === 2383; // 기록 합산 문항
 
                 // 라디오 옵션 렌더링
-                const optionsHtml = options.map(opt => {
-                    const checked = detail.status === opt.value ? 'checked' : '';
-                    return `
-                        <label style="margin-right: 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
-                            <input type="radio" name="edit_item_${item.id}" value="${opt.value}" ${checked} onchange="updateEditingDetail(${item.id}, this.value, 'status')">
-                            <span>${opt.label}</span>
-                        </label>
+                let optionsHtml = '';
+                if (isRecordAutoSumItem) {
+                    optionsHtml = `<div class="status-cell-container"><span style="font-weight: bold; color: #2c7a7b;">${detail.status === null ? '입력 대기' : detail.status + '점'}</span></div>`;
+                } else {
+                    optionsHtml = `
+                        <div class="status-cell-container" style="display: flex; flex-direction: column; gap: 6px;">
+                            ${options.map(opt => {
+                                const checked = detail.status === opt.value ? 'checked' : '';
+                                return `
+                                    <label style="margin-right: 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                                        <input type="radio" name="edit_item_${item.id}" value="${opt.value}" ${checked} onchange="updateEditingDetail(${item.id}, this.value, 'status')">
+                                        <span>${opt.label}</span>
+                                    </label>
+                                `;
+                            }).join('')}
+                            ${(isOptional || hasParentheses) ? `
+                                <label style="margin-right: 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; color: #718096; font-weight: 500;">
+                                    <input type="radio" name="edit_item_${item.id}" value="N/A" ${detail.status === 'N/A' || detail.status === null ? 'checked' : ''} onchange="updateEditingDetail(${item.id}, this.value, 'status')">
+                                    <span>N/A (생략)</span>
+                                </label>
+                            ` : ''}
+                        </div>
                     `;
-                }).join('');
-
-                // 추가 사항 또는 괄호 포함 섹션의 경우 N/A 선택지 노출
-                const naHtml = (isOptional || hasParentheses) ? `
-                    <label style="margin-right: 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; color: #718096; font-weight: 500;">
-                        <input type="radio" name="edit_item_${item.id}" value="N/A" ${detail.status === 'N/A' || detail.status === null ? 'checked' : ''} onchange="updateEditingDetail(${item.id}, this.value, 'status')">
-                        <span>N/A (생략)</span>
-                    </label>
-                ` : '';
+                }
 
                 return `
-                    <tr>
+                    <tr id="edit_row_${item.id}">
                         <td style="font-size: 0.85rem; line-height: 1.4;">
                             <span style="font-weight: 700; color: #4a5568; display: block; margin-bottom: 2px;">
                                 [${item.large_item}] ${item.small_item || ''}
@@ -2240,13 +2296,10 @@
                             ${item.standard}
                         </td>
                         <td>
-                            <div style="display: flex; flex-direction: column; gap: 6px;">
-                                ${optionsHtml}
-                                ${naHtml}
-                            </div>
+                            ${optionsHtml}
                         </td>
                         <td>
-                            <input type="text" value="${detail.comment || ''}" oninput="updateEditingDetail(${item.id}, this.value, 'comment')" style="width: 100%; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box;">
+                            <input type="text" class="comment-input-field" value="${detail.comment || ''}" ${isRecordAutoSumItem ? 'readonly style="background-color: #f1f5f9;"' : ''} oninput="updateEditingDetail(${item.id}, this.value, 'comment')" style="width: 100%; padding: 6px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box;">
                         </td>
                     </tr>
                 `;
@@ -2296,6 +2349,20 @@
 
                 // 점수 계산 (N/A 및 생략 건은 제외)
                 if (detail.status !== null && detail.status !== undefined && detail.status !== '' && detail.status !== 'N/A') {
+                    // 중복 반영 방지: 하위 10개 기록 항목(2384~2393)은 점수 합산에서 제외(2383 대항목에 합계 점수가 반영됨)
+                    const recordSubIds = [2384, 2385, 2386, 2387, 2388, 2389, 2390, 2391, 2392, 2393];
+                    if (recordSubIds.includes(item.id)) {
+                        continue;
+                    }
+
+                    // 만약 2383 기록 합산 문항이라면 10점 만점의 점수항목으로 계산 처리
+                    if (item.id === 2383) {
+                        const earnedVal = parseFloat(detail.status) || 0;
+                        earnedPoints += earnedVal;
+                        maxPoints += 10;
+                        continue;
+                    }
+
                     const options = parseOptions(item.compliance_criteria);
                     const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
 
@@ -2350,10 +2417,8 @@
                 if (farmsError) throw farmsError;
 
                 // 이미 완료된 평가 보고서 목록 가져오기 (실시간 상태 판별용)
-                const { data: reports, error: reportsError } = await db.from('evaluation_reports').select('farm_id');
+                const { data: reports, error: reportsError } = await db.from('evaluation_reports').select('farm_id, details');
                 if (reportsError) throw reportsError;
-
-                const completedFarmIds = new Set(reports.map(r => r.farm_id));
 
                 const tbody = document.getElementById('auditTargetList');
                 if (!tbody) return;
@@ -2405,9 +2470,66 @@
                     }
 
                     // 평가 완료 여부에 따라 상태 표시
-                    const isCompleted = completedFarmIds.has(farm.id);
-                    const statusText = isCompleted ? '평가완료' : '미실시';
-                    const statusBadgeClass = isCompleted ? 'status-complete' : 'status-pending';
+                    // (현재 심사설정에 등록된 심사유형과 심사예정일시 eval_date를 기준으로 해당 시간 이후에 제출된 보고서가 있는지 판별)
+                    let isCompleted = false;
+                    const farmReports = (reports || []).filter(r => r.farm_id === farm.id);
+                    if (farmReports.length > 0) {
+                        // 심사 예정 일시 파싱
+                        const evalDateLimit = remarksData.eval_date ? new Date(remarksData.eval_date) : null;
+                        
+                        isCompleted = farmReports.some(r => {
+                            // 보고서 제출 일시
+                            const reportCreatedAt = new Date(r.created_at);
+                            
+                            // 심사 예정 일시가 등록되어 있다면, 그 일시 이후에 작성된 보고서여야 현재 설정에 대한 평가 완료로 봄
+                            if (evalDateLimit && !isNaN(evalDateLimit.getTime())) {
+                                if (reportCreatedAt < evalDateLimit) {
+                                    return false; // 이전 심사의 보고서이므로 제외
+                                }
+                            }
+                            
+                            let rDetails = r.details;
+                            if (typeof rDetails === 'string') {
+                                try { rDetails = JSON.parse(rDetails); } catch(e) { rDetails = []; }
+                            }
+                            if (Array.isArray(rDetails)) {
+                                if (auditType === '신규') {
+                                    return true;
+                                } else if (auditType === '갱신') {
+                                    return true;
+                                } else if (auditType === '사후관리') {
+                                    return true;
+                                }
+                            }
+                            return true;
+                        });
+                    }
+
+                    // 평가중 및 미실시 동적 판단
+                    // (평가완료가 아니면서 평가원이 임시저장을 누른 기록(is_draft: true)이 존재하면 '평가중', 둘 다 없으면 '미실시'로 설정)
+                    let statusText = '미실시';
+                    let statusBadgeClass = 'status-pending';
+
+                    if (isCompleted) {
+                        statusText = '평가완료';
+                        statusBadgeClass = 'status-complete';
+                    } else if (remarksData.is_draft === true) {
+                        // 임시 저장 일시가 세팅된 경우, 이 또한 심사 예정일 이후의 유효한 임시저장인지 추가 체크할 수 있음
+                        const evalDateLimit = remarksData.eval_date ? new Date(remarksData.eval_date) : null;
+                        const draftDate = remarksData.draft_date ? new Date(remarksData.draft_date) : null;
+                        
+                        let isValidDraft = true;
+                        if (evalDateLimit && !isNaN(evalDateLimit.getTime()) && draftDate && !isNaN(draftDate.getTime())) {
+                            if (draftDate < evalDateLimit) {
+                                isValidDraft = false; // 이전 평가 도중에 저장해둔 임시저장이므로 무시
+                            }
+                        }
+                        
+                        if (isValidDraft) {
+                            statusText = '평가중';
+                            statusBadgeClass = 'status-process'; // 평가중 상태의 파란색/노란색 뱃지 스타일 사용
+                        }
+                    }
 
                     // farms 테이블의 remarks 컬럼에서 심사유형별 개수 누적
                     if (auditType === '신규') {

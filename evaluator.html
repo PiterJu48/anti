@@ -145,7 +145,10 @@
                                 <tr>
                                     <th>제출 일시</th>
                                     <th>대상 농장</th>
-                                    <th>점수</th>
+                                    <th>일반 환경 점수 (A그룹)</th>
+                                    <th>소 상태 평가 점수 (B그룹)</th>
+                                    <th>총 부적합(N) 개수</th>
+                                    <th>총점</th>
                                     <th>상태</th>
                                     <th>작업</th>
                                 </tr>
@@ -288,10 +291,10 @@
                 if (farmsError) throw farmsError;
 
                 // 이미 완료된 평가 보고서 목록 가져오기 (실시간 완료 필터링용)
-                const { data: reports, error: reportsError } = await db.from('evaluation_reports').select('farm_id');
+                const { data: reports, error: reportsError } = await db.from('evaluation_reports').select('farm_id, details, created_at');
                 if (reportsError) throw reportsError;
 
-                const completedFarmIds = new Set(reports.map(r => r.farm_id));
+                window.currentEvaluationReports = reports || [];
 
                 const now = new Date();
                 const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -353,10 +356,23 @@
                     }
 
                     // 완료된 보고서 여부에 따라 상태 뱃지 및 동작 버튼 텍스트 변경
-                    const isCompleted = completedFarmIds.has(farm.id);
+                    let isCompleted = false;
+                    const farmReports = (window.currentEvaluationReports || []).filter(r => r.farm_id === farm.id);
+                    if (farmReports.length > 0) {
+                        const evalDateLimit = remarksData.eval_date ? new Date(remarksData.eval_date) : null;
+                        isCompleted = farmReports.some(r => {
+                            const reportCreatedAt = new Date(r.created_at);
+                            if (evalDateLimit && !isNaN(evalDateLimit.getTime())) {
+                                if (reportCreatedAt < evalDateLimit) {
+                                    return false; // 이전 보고서
+                                }
+                            }
+                            return true;
+                        });
+                    }
                     const statusText = isCompleted ? '평가완료' : '방문 예정';
                     const statusBadgeClass = isCompleted ? 'status-complete' : 'status-pending';
-                    const actionBtnText = isCompleted ? '보고서 재작성' : '보고서 작성';
+                    const actionBtnText = isCompleted ? '보고서 재작성' : '평가 시작';
 
                     return `
                         <tr>
@@ -407,7 +423,8 @@
         }
 
         // 임시 저장 기능
-        function saveDraft() {
+        // 임시 저장 기능
+        async function saveDraft() {
             const farmId = document.getElementById('targetFarm').value;
             const evaluatorId = localStorage.getItem('user_id');
             if (!farmId || !evaluatorId) return;
@@ -426,15 +443,56 @@
             };
 
             localStorage.setItem(`temp_eval_${evaluatorId}_${farmId}`, JSON.stringify(draftData));
+
+            // 데이터베이스(farms.remarks)에도 임시저장 상태 기록
+            try {
+                const { data: farmData, error: selectError } = await db.from('farms').select('remarks').eq('id', farmId).single();
+                if (!selectError && farmData) {
+                    let remarksObj = {};
+                    try {
+                        if (farmData.remarks && farmData.remarks.trim().startsWith('{')) {
+                            remarksObj = JSON.parse(farmData.remarks);
+                        } else {
+                            remarksObj.notes = farmData.remarks || '';
+                        }
+                    } catch(e) {}
+                    remarksObj.is_draft = true;
+                    remarksObj.draft_date = new Date().toISOString();
+                    await db.from('farms').update({ remarks: JSON.stringify(remarksObj) }).eq('id', farmId);
+                }
+            } catch (err) {
+                console.error('Error syncing draft status to DB:', err);
+            }
+
             alert('작성 중인 평가 보고서가 임시 저장되었습니다.');
         }
 
         // 임시 저장 삭제 기능
-        function clearDraft() {
+        async function clearDraft() {
             const farmId = document.getElementById('targetFarm').value;
             const evaluatorId = localStorage.getItem('user_id');
             if (farmId && evaluatorId) {
                 localStorage.removeItem(`temp_eval_${evaluatorId}_${farmId}`);
+
+                // 데이터베이스(farms.remarks)의 임시저장 상태 해제
+                try {
+                    const { data: farmData, error: selectError } = await db.from('farms').select('remarks').eq('id', farmId).single();
+                    if (!selectError && farmData) {
+                        let remarksObj = {};
+                        try {
+                            if (farmData.remarks && farmData.remarks.trim().startsWith('{')) {
+                                remarksObj = JSON.parse(farmData.remarks);
+                            } else {
+                                remarksObj.notes = farmData.remarks || '';
+                            }
+                        } catch(e) {}
+                        remarksObj.is_draft = false;
+                        delete remarksObj.draft_date;
+                        await db.from('farms').update({ remarks: JSON.stringify(remarksObj) }).eq('id', farmId);
+                    }
+                } catch (err) {
+                    console.error('Error clearing draft status from DB:', err);
+                }
             }
         }
 
@@ -472,7 +530,7 @@
                     eval_value: null,
                     eval_comment: "",
                     eval_measurements: item.small_item === '조명' ? ['', '', '', '', '', '', '', '', '', ''] : ['', '', '', '', ''],
-                    eval_cow_conditions: item.section === '□ 소의 상태 평가' ? [
+                    eval_cow_conditions: (item.section === '□ 소의 상태 평가' && item.id !== 2459) ? [
                         { id: 1, values: {} },
                         { id: 2, values: {} }
                     ] : null
@@ -516,7 +574,7 @@
                 let currentGroup = null;
 
                 evaluationItems.forEach(item => {
-                    if (item.section === '□ 소의 상태 평가') {
+                    if (item.section === '□ 소의 상태 평가' && item.id !== 2459) {
                         let cowGroup = largeItemGroups.find(g => g.section === '□ 소의 상태 평가');
                         if (!cowGroup) {
                             cowGroup = {
@@ -609,9 +667,14 @@
 
                 const navigationHtml = `
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px;">
-                        <button class="logout-btn" style="padding: 12px 30px; font-weight: 500;" onclick="prevGroup()">
-                            <i class="fas fa-arrow-left"></i> 이전 대항목
-                        </button>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="logout-btn" style="padding: 12px 20px; font-weight: 500; background: #e2e8f0; color: #4a5568;" onclick="goToFirst()">
+                                <i class="fas fa-angle-double-left"></i> 처음
+                            </button>
+                            <button class="logout-btn" style="padding: 12px 30px; font-weight: 500;" onclick="prevGroup()">
+                                <i class="fas fa-arrow-left"></i> 이전
+                            </button>
+                        </div>
                         <button class="btn-primary" style="padding: 12px 25px; background: #4a5568; font-weight: 500;" onclick="saveDraft()">
                             <i class="fas fa-save"></i> 임시 저장
                         </button>
@@ -656,7 +719,7 @@
                         ${group.section} &gt; ${group.largeItem}
                     </h4>
                     ${(() => {
-                        const isCowConditionSection = group.section === '□ 소의 상태 평가';
+                        const isCowConditionSection = group.section === '□ 소의 상태 평가' && group.items.filter(item => item.id !== 2459).length > 0;
                         if (isCowConditionSection) {
                             const firstItem = group.items[0];
                             if (!firstItem.eval_cow_conditions) {
@@ -682,7 +745,7 @@
 
                                 <div id="cow_entity_container" style="display: flex; flex-direction: column; gap: 20px;">
                                     ${cowList.map((cow, activeIdx) => {
-                                        const isCurrentCowFinished = group.items.every(item => cow.values && cow.values[item.id] !== undefined && cow.values[item.id] !== null && cow.values[item.id] !== '');
+                                        const isCurrentCowFinished = group.items.filter(item => item.id !== 2459).every(item => cow.values && cow.values[item.id] !== undefined && cow.values[item.id] !== null && cow.values[item.id] !== '');
                                         return `
                                         <div class="card" style="background: #fff; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
                                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #edf2f7; padding-bottom: 8px;">
@@ -701,7 +764,7 @@
                                             
                                             <!-- 한 개체에 대한 모든 항목 일괄 평가 폼 -->
                                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                                                ${group.items.map(item => {
+                                                ${group.items.filter(item => item.id !== 2459).map(item => {
                                                     const options = parseOptions(item.compliance_criteria);
                                                     const curVal = cow.values && cow.values[item.id] !== undefined ? cow.values[item.id] : '';
                                                     return `
@@ -734,7 +797,7 @@
                                     <i class="fas fa-calculator"></i> 소의 상태 평가 자동 연산 및 환산 결과
                                 </h5>
                                 <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.9rem; color: #2d3748;">
-                                    ${group.items.map(item => {
+                                    ${group.items.filter(item => item.id !== 2459).map(item => {
                                         const values = cowList.map(c => c.values && c.values[item.id]).filter(v => v !== undefined && v !== '' && v !== null && !isNaN(parseFloat(v))).map(v => parseFloat(v));
                                         const count = values.length;
                                         const avgVal = count > 0 ? parseFloat((values.reduce((a, b) => a + b, 0) / count).toFixed(2)) : 0;
@@ -856,10 +919,13 @@
 
             const navigationHtml = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px;">
-                    <div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="logout-btn" style="padding: 12px 20px; font-weight: 500; background: #e2e8f0; color: #4a5568;" onclick="goToFirst()">
+                            <i class="fas fa-angle-double-left"></i> 처음
+                        </button>
                         ${currentGroupIndex > 0 ? `
                             <button class="logout-btn" style="padding: 12px 30px; font-weight: 500;" onclick="prevGroup()">
-                                <i class="fas fa-arrow-left"></i> 이전 대항목
+                                <i class="fas fa-arrow-left"></i> 이전
                             </button>
                         ` : ''}
                     </div>
@@ -868,9 +934,12 @@
                             <i class="fas fa-save"></i> 임시 저장
                         </button>
                     </div>
-                    <div>
+                    <div style="display: flex; gap: 8px;">
                         <button class="btn-primary" style="padding: 12px 40px; font-weight: 500;" onclick="nextGroup()">
                             다음 <i class="fas fa-arrow-right"></i>
+                        </button>
+                        <button class="btn-primary" style="padding: 12px 20px; font-weight: 500; background: #319795;" onclick="goToLast()">
+                            끝으로 <i class="fas fa-angle-double-right"></i>
                         </button>
                     </div>
                 </div>
@@ -1070,6 +1139,8 @@
             const cowList = firstItem.eval_cow_conditions || [];
 
             group.items.forEach(item => {
+                if (item.id === 2459) return; // 원유 체세포수는 개체별 자동 연산 대상에서 제외
+
                 const validVals = cowList.map(c => c.values && c.values[item.id]).filter(v => v !== undefined && v !== null && !isNaN(v));
                 
                 if (validVals.length < 2) {
@@ -1116,6 +1187,20 @@
             }
         }
 
+        // 첫 페이지로 이동
+        function goToFirst() {
+            currentGroupIndex = 0;
+            renderCurrentGroup();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 마지막 페이지로 이동
+        function goToLast() {
+            currentGroupIndex = largeItemGroups.length;
+            renderCurrentGroup();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
         // 이전 페이지로 이동
         function prevGroup() {
             if (currentGroupIndex > 0) {
@@ -1125,45 +1210,8 @@
             }
         }
 
-        // 다음 페이지로 이동 (검증 포함)
+        // 다음 페이지로 이동 (검증 생략 - 미실시 항목이 있어도 넘어갈 수 있게 변경)
         function nextGroup() {
-            const group = largeItemGroups[currentGroupIndex];
-            
-            // 특수 문항(조명, 공기 오염도)의 측정값 개수 검증
-            for (const item of group.items) {
-                if (item.small_item === '조명' || item.small_item === '공기 오염도') {
-                    const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
-                    if (list.length < 2) {
-                        alert(`'${item.small_item}' 평가는 최소 2개 이상의 측정값을 입력해야 합니다.`);
-                        return;
-                    }
-                }
-                if (item.section === '□ 소의 상태 평가') {
-                    const firstItem = group.items[0];
-                    const cowList = firstItem ? (firstItem.eval_cow_conditions || []) : [];
-                    if (cowList.length < 2) {
-                        alert(`'소의 상태 평가'는 최소 2개체 이상 평가해야 합니다.`);
-                        return;
-                    }
-                    const invalidCows = cowList.filter(c => !c.values || c.values[item.id] === undefined || c.values[item.id] === null || c.values[item.id] === '');
-                    if (invalidCows.length > 0) {
-                        alert(`'소의 상태 평가'의 '${item.small_item || item.large_item}' 항목은 모든 개체에 대해 점수가 선택되어야 합니다.`);
-                        return;
-                    }
-                }
-            }
-
-            // section 이름이나 대항목 명칭에 '(추가 사항)'이 들어간 항목은 제외하고 미입력 건 필터링
-            const uncompleted = group.items.filter(i => {
-                const isOptional = (i.section && i.section.includes('(추가 사항)')) || (i.large_item && i.large_item.includes('(추가 사항)'));
-                return i.eval_value === null && !isOptional;
-            });
-
-            if (uncompleted.length > 0) {
-                alert('현재 대항목의 필수 평가 항목을 모두 입력해 주세요.');
-                return;
-            }
-
             if (currentGroupIndex < largeItemGroups.length) {
                 currentGroupIndex++;
                 renderCurrentGroup();
@@ -1382,15 +1430,107 @@
 
             const list = document.getElementById('officialHistoryList');
             if (list) {
-                list.innerHTML = filtered.map(item => `
-                    <tr>
-                        <td>${new Date(item.created_at).toLocaleString()}</td>
-                        <td>${item.farms ? item.farms.name : '알수없음'}</td>
-                        <td style="font-weight: 700;">${item.score}%</td>
-                        <td><span class="status-badge status-completed">제출완료</span></td>
-                        <td><button class="logout-btn" style="padding: 4px 8px;" onclick="window.open('diagnosis_report.html?id=${item.id}&type=official', '_blank', 'width=1000,height=800')">보고서</button></td>
-                    </tr>
-                `).join('') || '<tr><td colspan="5" style="text-align:center; padding:20px;">검색된 심사이력이 없습니다.</td></tr>';
+                list.innerHTML = filtered.map(item => {
+                    // 각 보고서 데이터의 실시간 점수 분석 및 부적합(N) 개수 계산
+                    let groupA_earned = 0;
+                    let groupA_max = 0;
+                    let groupB_earned = 0;
+                    let groupB_max = 0;
+                    let nonCompliantYNCount = 0;
+
+                    let detailsList = [];
+                    if (item.details) {
+                        if (Array.isArray(item.details)) {
+                            detailsList = item.details.map(d => ({ section: d.section, compliance_criteria: d.compliance_criteria, status: d.status }));
+                        } else {
+                            detailsList = Object.keys(item.details).map(k => {
+                                const d = item.details[k];
+                                return { section: d.section, compliance_criteria: d.compliance_criteria, status: d.status };
+                            });
+                        }
+                    }
+
+                    detailsList.forEach(d => {
+                        const status = d.status;
+                        if (status === null || status === 'N/A' || status === 'NA') return;
+
+                        const section = d.section || '';
+                        const isGroupA = [
+                            '□ 일반기준',
+                            '□ 사양관리 방법',
+                            '□ 사육시설 및 환경',
+                            '□ 동물복지형 자유방목(추가 사항)',
+                            '□ 동물복지형 자유방목 (추가사항)'
+                        ].includes(section);
+
+                        const isGroupB = (section === '□ 소의 상태 평가');
+
+                        // 옵션 파싱
+                        const parseOptionsLocal = (criteriaText) => {
+                            if (!criteriaText || criteriaText.trim() === "") {
+                                return [{ value: "Y" }, { value: "N" }];
+                            }
+                            return criteriaText.split('\n').map(line => {
+                                const trimmed = line.trim();
+                                if (!trimmed) return null;
+                                let val = trimmed;
+                                if (trimmed.includes(':')) {
+                                    val = trimmed.split(':')[0].trim();
+                                }
+                                return { value: val };
+                            }).filter(o => o !== null);
+                        };
+
+                        const options = parseOptionsLocal(d.compliance_criteria);
+                        const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+
+                        if (numericValues.length > 0) {
+                            const maxVal = Math.max(...numericValues);
+                            let earnedVal = parseFloat(status);
+                            if (isNaN(earnedVal)) earnedVal = 0;
+
+                            if (isGroupA) {
+                                groupA_earned += earnedVal;
+                                groupA_max += maxVal;
+                            } else if (isGroupB) {
+                                groupB_earned += earnedVal;
+                                groupB_max += maxVal;
+                            }
+                        } else {
+                            let earnedVal = 0;
+                            let maxVal = 1;
+                            if (status && String(status).trim().startsWith('Y')) {
+                                earnedVal = 1;
+                            } else if (status && String(status).trim().startsWith('N')) {
+                                nonCompliantYNCount++;
+                            }
+
+                            if (isGroupA) {
+                                groupA_earned += earnedVal;
+                                groupA_max += maxVal;
+                            } else if (isGroupB) {
+                                groupB_earned += earnedVal;
+                                groupB_max += maxVal;
+                            }
+                        }
+                    });
+
+                    const scoreA = groupA_max > 0 ? Math.round((groupA_earned / groupA_max) * 100) : 0;
+                    const scoreB = groupB_earned;
+
+                    return `
+                        <tr>
+                            <td>${new Date(item.created_at).toLocaleString()}</td>
+                            <td>${item.farms ? item.farms.name : '알수없음'}</td>
+                            <td style="font-weight: 500; color: #2c7a7b;">${scoreA}점</td>
+                            <td style="font-weight: 500; color: #2b6cb0;">${scoreB}점</td>
+                            <td style="font-weight: 500; color: ${nonCompliantYNCount > 0 ? '#e53e3e' : '#4a5568'};">${nonCompliantYNCount}개</td>
+                            <td style="font-weight: 700;">${item.score}점</td>
+                            <td><span class="status-badge status-completed">제출완료</span></td>
+                            <td><button class="logout-btn" style="padding: 4px 8px;" onclick="window.open('diagnosis_report.html?id=${item.id}&type=official', '_blank', 'width=1000,height=800')">보고서</button></td>
+                        </tr>
+                    `;
+                }).join('') || '<tr><td colspan="8" style="text-align:center; padding:20px;">검색된 심사이력이 없습니다.</td></tr>';
             }
         }
 
