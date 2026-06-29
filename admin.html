@@ -274,13 +274,9 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <h3><i class="fas fa-tasks"></i> 평가항목 관리</h3>
                         <div style="display: flex; gap: 10px;">
-                            <button class="btn-primary" style="background: #4a5568;" onclick="triggerFileInput()">
-                                <i class="fas fa-file-import"></i> CSV 임포트
-                            </button>
                             <button class="btn-primary" onclick="openEvalItemModal()">
                                 <i class="fas fa-plus"></i> 신규 항목 추가
                             </button>
-                            <input type="file" id="evalItemFileInput" style="display: none;" accept=".csv" onchange="handleFileUpload(event)">
                         </div>
                     </div>
                     <!-- 섹션 활성화 설정 영역 -->
@@ -2417,21 +2413,48 @@
                 if (farmsError) throw farmsError;
 
                 // 이미 완료된 평가 보고서 목록 가져오기 (실시간 상태 판별용)
-                const { data: reports, error: reportsError } = await db.from('evaluation_reports').select('farm_id, details');
+                const { data: reports, error: reportsError } = await db.from('evaluation_reports').select('farm_id, details, created_at');
                 if (reportsError) throw reportsError;
 
                 const tbody = document.getElementById('auditTargetList');
                 if (!tbody) return;
 
                 // remarks를 파싱하여 심사등록된 농장만 필터링
+                // 추가 요건: 날짜가 지났는데(과거 평가일시) 평가 미실시 상태인 경우(평가완료가 아닌 경우) 목록 노출 및 집계에서 제외
+                const today = new Date();
                 const registeredFarms = (farms || []).filter(farm => {
-                    let remarksData = { is_registered: false };
+                    let remarksData = { is_registered: false, eval_date: '' };
                     try {
                         if (farm.remarks && farm.remarks.trim().startsWith('{')) {
                             remarksData = JSON.parse(farm.remarks);
                         }
                     } catch (e) {}
-                    return remarksData.is_registered === true;
+
+                    if (remarksData.is_registered !== true) return false;
+
+                    // 평가 예정일이 설정되어 있고, 오늘보다 과거인 경우 상태 체크
+                    if (remarksData.eval_date) {
+                        const evalDate = new Date(remarksData.eval_date);
+                        if (!isNaN(evalDate.getTime()) && evalDate < today) {
+                            // 해당 농장의 완료된 보고서가 있는지 확인
+                            const farmReports = (reports || []).filter(r => r.farm_id === farm.id);
+                            let hasCompletedReport = false;
+                            if (farmReports.length > 0) {
+                                hasCompletedReport = farmReports.some(r => {
+                                    const reportCreatedAt = new Date(r.created_at);
+                                    if (reportCreatedAt.getTime() >= evalDate.getTime()) {
+                                        return true; // 예정일 이후에 제출된 실제 완료 건이 있음
+                                    }
+                                    return false;
+                                });
+                            }
+                            // 날짜가 지났는데 평가 완료 건이 없으면(미실시/평가중 상태라면) 목록 및 대시보드 집계에서 필터링하여 제외
+                            if (!hasCompletedReport) {
+                                return false;
+                            }
+                        }
+                    }
+                    return true;
                 });
 
                 if (!registeredFarms || registeredFarms.length === 0) {
@@ -2469,23 +2492,52 @@
                         evalDateStr = isNaN(d.getTime()) ? remarksData.eval_date : d.toLocaleString();
                     }
 
+                    // 크롬/사파리 브라우저 호환성을 고려한 안전한 Date 파싱 함수
+                    const safeParseDate = (dateStr) => {
+                        if (!dateStr) return null;
+                        const d = new Date(dateStr);
+                        if (!isNaN(d.getTime())) return d;
+                        // YYYY-MM-DDTHH:MM 또는 YYYY-MM-DD HH:MM 수동 파싱 처리
+                        try {
+                            const parts = dateStr.split(/[-T :]/);
+                            if (parts.length >= 5) {
+                                return new Date(
+                                    parseInt(parts[0]),
+                                    parseInt(parts[1]) - 1,
+                                    parseInt(parts[2]),
+                                    parseInt(parts[3]),
+                                    parseInt(parts[4])
+                                );
+                            }
+                        } catch (e) {}
+                        return null;
+                    };
+
                     // 평가 완료 여부에 따라 상태 표시
                     // (현재 심사설정에 등록된 심사유형과 심사예정일시 eval_date를 기준으로 해당 시간 이후에 제출된 보고서가 있는지 판별)
                     let isCompleted = false;
                     const farmReports = (reports || []).filter(r => r.farm_id === farm.id);
                     if (farmReports.length > 0) {
-                        // 심사 예정 일시 파싱
-                        const evalDateLimit = remarksData.eval_date ? new Date(remarksData.eval_date) : null;
+                        const evalDateLimit = safeParseDate(remarksData.eval_date);
                         
                         isCompleted = farmReports.some(r => {
                             // 보고서 제출 일시
                             const reportCreatedAt = new Date(r.created_at);
                             
                             // 심사 예정 일시가 등록되어 있다면, 그 일시 이후에 작성된 보고서여야 현재 설정에 대한 평가 완료로 봄
+                            // 타임존 차이에 따른 시간 정렬 오차(KST vs UTC)를 방지하기 위해 getTime() 밀리초 값을 정확하게 비교
+                            let isBeforeLimit = false;
                             if (evalDateLimit && !isNaN(evalDateLimit.getTime())) {
-                                if (reportCreatedAt < evalDateLimit) {
-                                    return false; // 이전 심사의 보고서이므로 제외
+                                // DB 생성 시간(UTC)을 로컬 타임존 기준으로 밀리초 변환하여 비교
+                                if (reportCreatedAt.getTime() < evalDateLimit.getTime()) {
+                                    isBeforeLimit = true;
                                 }
+                            }
+                            
+                            console.log(`[디버그] 농장: ${farm.name}, 보고서생성일: ${r.created_at} (${reportCreatedAt.toLocaleString()}), 심사한계일: ${remarksData.eval_date} (${evalDateLimit ? evalDateLimit.toLocaleString() : '없음'}), 한계일보다이전인가: ${isBeforeLimit}`);
+                            
+                            if (isBeforeLimit) {
+                                return false; // 이전 심사의 보고서이므로 제외
                             }
                             
                             let rDetails = r.details;
@@ -2503,6 +2555,7 @@
                             }
                             return true;
                         });
+                        console.log(`[디버그] 농장: ${farm.name}, 최종 완료 판정(isCompleted): ${isCompleted}`);
                     }
 
                     // 평가중 및 미실시 동적 판단
@@ -2515,12 +2568,12 @@
                         statusBadgeClass = 'status-complete';
                     } else if (remarksData.is_draft === true) {
                         // 임시 저장 일시가 세팅된 경우, 이 또한 심사 예정일 이후의 유효한 임시저장인지 추가 체크할 수 있음
-                        const evalDateLimit = remarksData.eval_date ? new Date(remarksData.eval_date) : null;
-                        const draftDate = remarksData.draft_date ? new Date(remarksData.draft_date) : null;
+                        const evalDateLimit = safeParseDate(remarksData.eval_date);
+                        const draftDate = safeParseDate(remarksData.draft_date);
                         
                         let isValidDraft = true;
                         if (evalDateLimit && !isNaN(evalDateLimit.getTime()) && draftDate && !isNaN(draftDate.getTime())) {
-                            if (draftDate < evalDateLimit) {
+                            if (draftDate.getTime() < evalDateLimit.getTime()) {
                                 isValidDraft = false; // 이전 평가 도중에 저장해둔 임시저장이므로 무시
                             }
                         }
@@ -2796,11 +2849,30 @@
                 // 7. 각 평가 항목 결과값 매핑 (6행~137행 순회하며 G열 업데이트)
                 function cleanText(str) {
                     if (!str) return '';
-                    return String(str).replace(/\s+/g, '').replace(/․/g, '.');
+                    // 공백, 쉼표, 물음표, 마침표, 줄바꿈 등을 모두 제거하고 순수 한글/영어/숫자만 비교하도록 개선
+                    return String(str).replace(/[^가-힣a-zA-Z0-9]/g, '');
                 }
 
                 // 설명 및 대헤더 행 번호 리스트 (값 업데이트 대상 제외)
                 const skipRows = [6, 16, 61, 99, 109];
+
+                // 예외적으로 매칭이 필요한 특수 행 번호와 DB 문항 ID 간 수동 매핑 규칙
+                // -1 값은 채우지 않는 단순 안내(판정 기준) 및 소 항목이 누락된 미사용 행을 의미함
+                const manualMappings = {
+                    24: 2390,  // 7. 송아지 관리, 제각, 거세 관련 기록
+                    52: 2418,  // 제각 규정 준수 문항
+                    71: 2432,  // 휴식공간 최소 소요면적 문항
+                    74: 2435,  // 소의 몸 배설물 청결도 문항
+                    90: 2451,  // 가축분뇨 배출시설 신고증명서 문항
+                    93: -1,    // 판정 기준 안내 행
+                    101: -1,   // 전체적으로 털에 윤기가 나고 깨끗함 (DB 미등록 문항)
+                    104: 2458, // 심한 부상을 입었거나 병든 소가 없음 문항
+                    106: -1,   // 판정 기준 안내 행
+                    110: 2460, // 방목장 최소 면적 기준 문항
+                    117: -1,   // 판정 기준 안내 행
+                    130: 2460, // 방목장 면적 실측 기준 문항
+                    137: -1    // 판정 기준 안내 행
+                };
 
                 for (let r = 6; r <= 137; r++) {
                     if (skipRows.includes(r)) continue;
@@ -2814,28 +2886,37 @@
                     if (textB.length < 5 && textC.length < 5) continue; // 헤더성 짧은 단어 행 방어
 
                     // 이 엑셀 행에 매칭되는 DB 원본 문항 검색 (비활성 섹션 여부 확인용)
-                    const dbItem = evalItems.find(item => {
-                        const dbStandard = cleanText(item.standard);
-                        if (!dbStandard) return false;
-                        return textB.includes(dbStandard) || textC.includes(dbStandard);
-                    });
+                    let dbItem = null;
+                    if (manualMappings[r] !== undefined) {
+                        const targetId = manualMappings[r];
+                        if (targetId === -1) continue; // 매핑 불필요 행은 다음 루프로 건너뜀
+                        dbItem = evalItems.find(item => item.id === targetId);
+                    } else {
+                        dbItem = evalItems.find(item => {
+                            const dbStandard = cleanText(item.standard);
+                            if (!dbStandard) return false;
+                            return (textB && dbStandard === textB) || (textC && dbStandard === textC);
+                        });
+                    }
 
                     if (dbItem) {
                         const itemSectClean = cleanSect(dbItem.section || "");
                         const isInactive = inactiveKeywords.some(keyword => itemSectClean.includes(keyword));
 
+                        let statusVal = '';
                         if (isInactive) {
                             // 비활성 섹션이면 무조건 'N/A'로 업데이트
-                            updateCell(`G${r}`, 'N/A');
+                            statusVal = 'N/A';
                         } else {
                             // 활성 섹션이면 실제 평가 결과가 매핑되는지 확인
                             const matchedDetail = detailItems.find(dt => dt.orig_id === dbItem.id);
-                            let statusVal = matchedDetail ? matchedDetail.status : '';
+                            statusVal = matchedDetail ? matchedDetail.status : '';
                             if (statusVal === null || statusVal === undefined) {
                                 statusVal = '';
                             }
-                            updateCell(`G${r}`, statusVal);
                         }
+                        
+                        updateCell(`G${r}`, statusVal);
                     }
                 }
 

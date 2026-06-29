@@ -404,10 +404,11 @@ body {
 /* 평가 항목 오른쪽 입력 영역 라디오 버튼 정렬 */
 .eval-item-options {
     display: flex;
-    gap: 15px;
-    align-items: center;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
     justify-content: flex-start;
-    flex-wrap: wrap;
+    width: 100%;
 }
 
 /* 모바일 반응형 처리 */

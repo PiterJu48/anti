@@ -359,11 +359,31 @@
                     let isCompleted = false;
                     const farmReports = (window.currentEvaluationReports || []).filter(r => r.farm_id === farm.id);
                     if (farmReports.length > 0) {
-                        const evalDateLimit = remarksData.eval_date ? new Date(remarksData.eval_date) : null;
+                        // 크롬/사파리 브라우저 호환성을 고려한 안전한 Date 파싱 함수
+                        const safeParseDate = (dateStr) => {
+                            if (!dateStr) return null;
+                            const d = new Date(dateStr);
+                            if (!isNaN(d.getTime())) return d;
+                            try {
+                                const parts = dateStr.split(/[-T :]/);
+                                if (parts.length >= 5) {
+                                    return new Date(
+                                        parseInt(parts[0]),
+                                        parseInt(parts[1]) - 1,
+                                        parseInt(parts[2]),
+                                        parseInt(parts[3]),
+                                        parseInt(parts[4])
+                                    );
+                                }
+                            } catch (e) {}
+                            return null;
+                        };
+
+                        const evalDateLimit = safeParseDate(remarksData.eval_date);
                         isCompleted = farmReports.some(r => {
                             const reportCreatedAt = new Date(r.created_at);
                             if (evalDateLimit && !isNaN(evalDateLimit.getTime())) {
-                                if (reportCreatedAt < evalDateLimit) {
+                                if (reportCreatedAt.getTime() < evalDateLimit.getTime()) {
                                     return false; // 이전 보고서
                                 }
                             }
@@ -821,12 +841,12 @@
                             const isSpecialItem = item.small_item === '조명' || item.small_item === '공기 오염도';
                             return `
                             <div class="card" style="margin-bottom: 15px; padding: 20px; border: 1px solid #edf2f7;">
-                                <div class="eval-item-row">
+                                <div class="eval-item-row" style="display: flex; flex-direction: column; align-items: stretch; gap: 12px;">
                                     <div class="eval-item-left">
                                         <div style="font-weight: 700; color: #2d3748; margin-bottom: 5px;">${item.small_item || item.large_item}</div>
-                                        <div style="font-size: 0.9rem; color: #4a5568; margin-bottom: 10px;">${item.standard}</div>
+                                        <div style="font-size: 0.9rem; color: #4a5568; margin-bottom: 5px;">${item.standard}</div>
                                     </div>
-                                    <div class="eval-item-right" style="flex: 1; max-width: 450px;">
+                                    <div class="eval-item-right" style="width: 100%; max-width: 100%; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left;">
                                         ${isSpecialItem ? `
                                             <div style="margin-bottom: 15px; background: #f7fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
                                                 ${item.small_item === '조명' ? `
@@ -885,7 +905,7 @@
                                                 </div>
                                             </div>
                                         ` : ''}
-                                        <div class="eval-item-options" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #edf2f7; ${isSpecialItem ? 'pointer-events: none; opacity: 0.85; background: #f8fafc;' : ''}">
+                                        <div class="eval-item-options" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #edf2f7; width: 100%; ${isSpecialItem ? 'pointer-events: none; opacity: 0.85; background: #f8fafc;' : ''}">
                                             ${options.map(opt => `
                                                 <label style="cursor: ${isSpecialItem ? 'default' : 'pointer'}; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #4a5568;">
                                                     <input type="radio" name="off_item_${item.id}" value="${opt.value}" required 
