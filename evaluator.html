@@ -392,7 +392,7 @@
                     }
                     const statusText = isCompleted ? '평가완료' : '방문 예정';
                     const statusBadgeClass = isCompleted ? 'status-complete' : 'status-pending';
-                    const actionBtnText = isCompleted ? '보고서 재작성' : '평가 시작';
+                    const actionBtnText = '평가 시작';
 
                     return `
                         <tr>
@@ -836,9 +836,11 @@
 
                         // 일반 문항 렌더링
                         return group.items.map(item => {
+                            const isRecordAutoSumItem = item.id === 2383; // 기록 자동 합산 상위 문항
                             const options = parseOptions(item.compliance_criteria);
                             const hasParentheses = item.section && item.section.includes('(') && item.section.includes(')');
-                            const isSpecialItem = item.small_item === '조명' || item.small_item === '공기 오염도';
+                            const isSpecialItem = item.small_item === '조명' || item.small_item === '온도';
+                            const isOptionDisabled = isSpecialItem && item.small_item !== '온도';
                             return `
                             <div class="card" style="margin-bottom: 15px; padding: 20px; border: 1px solid #edf2f7;">
                                 <div class="eval-item-row" style="display: flex; flex-direction: column; align-items: stretch; gap: 12px;">
@@ -905,28 +907,46 @@
                                                 </div>
                                             </div>
                                         ` : ''}
-                                        <div class="eval-item-options" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #edf2f7; width: 100%; ${isSpecialItem ? 'pointer-events: none; opacity: 0.85; background: #f8fafc;' : ''}">
-                                            ${options.map(opt => `
-                                                <label style="cursor: ${isSpecialItem ? 'default' : 'pointer'}; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #4a5568;">
-                                                    <input type="radio" name="off_item_${item.id}" value="${opt.value}" required 
-                                                        ${item.eval_value === opt.value ? 'checked' : ''} 
-                                                        ${isSpecialItem ? 'disabled' : ''}
-                                                        onchange="saveItemValue(${item.id}, '${opt.value}')" style="margin-top: 4px;"> 
-                                                    <span>${opt.label}</span>
-                                                </label>
-                                            `).join('')}
-                                            ${hasParentheses && !isSpecialItem ? `
-                                                <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #718096; font-weight: 500; border-top: 1px dashed #e2e8f0; padding-top: 8px; margin-top: 4px;">
-                                                    <input type="radio" name="off_item_${item.id}" value="N/A" 
-                                                        ${item.eval_value === 'N/A' || item.eval_value === null ? 'checked' : ''} 
-                                                        onchange="saveItemValue(${item.id}, 'N/A')" style="margin-top: 4px;"> 
-                                                    <span>해당사항없음 (평가 생략)</span>
-                                                </label>
-                                            ` : ''}
-                                        </div>
+                                        ${isRecordAutoSumItem ? `
+                                            <div style="margin-bottom: 15px; background: #e6fffa; padding: 12px; border-radius: 6px; border: 1px solid #b2f5ea; width: 100%;">
+                                                <div style="font-weight: 600; font-size: 0.85rem; color: #2c7a7b; margin-bottom: 6px;">
+                                                    기록 의무사항 자동 연산 결과 (하위 10개 항목 점수 합산)
+                                                </div>
+                                                <div id="calc_result_2383" style="font-size: 1.1rem; color: #2d3748; line-height: 1.5; font-weight: 700;">
+                                                    ${(() => {
+                                                        const recordSubIds = [2384, 2385, 2386, 2387, 2388, 2389, 2390, 2391, 2392, 2393];
+                                                        const subItems = recordSubIds.map(subId => evaluationItems.find(i => i.id === subId)).filter(i => i);
+                                                        const answered = subItems.filter(i => i.eval_value !== null && i.eval_value !== undefined && i.eval_value !== '' && i.eval_value !== 'N/A');
+                                                        return item.eval_value === null 
+                                                            ? `<span style="color: #e53e3e;">입력 대기 (하위 10개 중 ${answered.length}개 입력됨)</span>` 
+                                                            : `${item.eval_value}점`;
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        ` : `
+                                            <div class="eval-item-options" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #edf2f7; width: 100%; ${isOptionDisabled ? 'pointer-events: none; opacity: 0.85; background: #f8fafc;' : ''}">
+                                                ${options.map(opt => `
+                                                    <label style="cursor: ${isOptionDisabled ? 'default' : 'pointer'}; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #4a5568;">
+                                                        <input type="radio" name="off_item_${item.id}" value="${opt.value}" required 
+                                                            ${item.eval_value === opt.value ? 'checked' : ''} 
+                                                            ${isOptionDisabled ? 'disabled' : ''}
+                                                            onchange="saveItemValue(${item.id}, '${opt.value}')" style="margin-top: 4px;"> 
+                                                        <span>${opt.label}</span>
+                                                    </label>
+                                                `).join('')}
+                                                ${hasParentheses && !isOptionDisabled ? `
+                                                    <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px; font-size: 0.9rem; color: #718096; font-weight: 500; border-top: 1px dashed #e2e8f0; padding-top: 8px; margin-top: 4px;">
+                                                        <input type="radio" name="off_item_${item.id}" value="N/A" 
+                                                            ${item.eval_value === 'N/A' || item.eval_value === null ? 'checked' : ''} 
+                                                            onchange="saveItemValue(${item.id}, 'N/A')" style="margin-top: 4px;"> 
+                                                        <span>해당사항없음 (평가 생략)</span>
+                                                    </label>
+                                                ` : ''}
+                                            </div>
+                                        `}
                                         <input type="text" id="off_comm_${item.id}" placeholder="평가 의견 입력" 
                                             value="${item.eval_comment || ''}" 
-                                            ${isSpecialItem ? 'readonly style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem; border-radius: 4px; background: #f1f5f9; color: #4a5568;"' : 'style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem; border-radius: 4px;"'}
+                                            ${(isOptionDisabled || isRecordAutoSumItem) ? 'readonly style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem; border-radius: 4px; background: #f1f5f9; color: #4a5568;"' : 'style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem; border-radius: 4px;"'}
                                             oninput="saveItemComment(${item.id}, this.value)">
                                     </div>
                                 </div>
@@ -1019,6 +1039,15 @@
                 const statusText = status === 'Y' ? '<strong style="color: #2c7a7b;">적합(Y)</strong>' : '<strong style="color: #e53e3e;">부적합(N)</strong>';
                 
                 return `일반공간 측정: <strong>${listGeneral.length}개</strong>, 휴식공간 측정: <strong>${listRest.length}개</strong> &rarr; 판정: ${statusText}`;
+            } else if (item.small_item === '온도') {
+                const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
+                if (list.length < 2) {
+                    return `<span style="color: #e53e3e;"><i class="fas fa-info-circle"></i> 최소 2개 이상의 값을 입력하세요. (현재: ${list.length}개 입력됨)</span>`;
+                }
+                const minVal = Math.min(...list);
+                const sum = list.reduce((a, b) => a + b, 0);
+                const avgVal = parseFloat((sum / list.length).toFixed(2));
+                return `평균 온도: <strong>${avgVal} ℃</strong>, 최저 온도: <strong>${minVal} ℃</strong>`;
             } else {
                 const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
                 if (list.length < 2) {
@@ -1089,6 +1118,16 @@
                 }
                 item.eval_value = judgment;
                 item.eval_comment = `[자동 판정] 측정값: [${list.join(', ')}], 평균: ${avgVal} ppm, 최소: ${minVal} ppm (기준: 평균 25 ppm 이하 시 적합)`;
+            } else if (item.small_item === '온도') {
+                const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
+                if (list.length < 2) {
+                    item.eval_comment = "온도 측정값이 부족합니다. (최소 2개 필수)";
+                    return;
+                }
+                const minVal = Math.min(...list);
+                const sum = list.reduce((a, b) => a + b, 0);
+                const avgVal = parseFloat((sum / list.length).toFixed(2));
+                item.eval_comment = `[실측 기록] 온도 실측치: [${list.join(', ')}], 평균 온도: ${avgVal} ℃, 최저 온도: ${minVal} ℃`;
             }
         }
 
@@ -1142,7 +1181,8 @@
             if (!cowList[cowIdx].values) {
                 cowList[cowIdx].values = {};
             }
-            cowList[cowIdx].values[itemId] = val === '' ? null : parseFloat(val);
+            const parsedVal = isNaN(parseFloat(val)) ? val : parseFloat(val);
+            cowList[cowIdx].values[itemId] = val === '' ? null : parsedVal;
 
             calculateCowSectionItems(firstItemId);
             renderCurrentGroup();
@@ -1161,7 +1201,24 @@
             group.items.forEach(item => {
                 if (item.id === 2459) return; // 원유 체세포수는 개체별 자동 연산 대상에서 제외
 
-                const validVals = cowList.map(c => c.values && c.values[item.id]).filter(v => v !== undefined && v !== null && !isNaN(v));
+                const options = parseOptions(item.compliance_criteria);
+                const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
+
+                if (numericValues.length === 0) {
+                    // 적부(Y/N)형 문항 처리
+                    const validVals = cowList.map(c => c.values && c.values[item.id]).filter(v => v !== undefined && v !== null && v !== '');
+                    if (validVals.length < 2) {
+                        item.eval_value = null;
+                        item.eval_comment = "평가 개체수가 부족합니다. (최소 2개체 필수)";
+                        return;
+                    }
+                    const hasN = validVals.some(v => v === 'N');
+                    item.eval_value = hasN ? 'N' : 'Y';
+                    item.eval_comment = `[자동 판정] 평가 개체수: ${validVals.length}개체 중 부적합(N) 개체 존재 여부: ${hasN ? '있음(N)' : '없음(Y)'}`;
+                    return;
+                }
+
+                const validVals = cowList.map(c => c.values && c.values[item.id]).filter(v => v !== undefined && v !== null && !isNaN(parseFloat(v))).map(v => parseFloat(v));
                 
                 if (validVals.length < 2) {
                     item.eval_value = null;
@@ -1171,9 +1228,6 @@
 
                 const sum = validVals.reduce((a, b) => a + b, 0);
                 const avgVal = parseFloat((sum / validVals.length).toFixed(2));
-
-                const options = parseOptions(item.compliance_criteria);
-                const numericValues = options.map(o => parseFloat(o.value)).filter(v => !isNaN(v));
 
                 let closestVal = null;
                 let minDiff = Infinity;
@@ -1196,6 +1250,45 @@
             const item = evaluationItems.find(i => i.id === id);
             if (item) {
                 item.eval_value = value;
+            }
+
+            // 하위 10개 기록 항목(2384~2393) 중 하나가 변경되었다면 2383번 문항 자동 재연산
+            const recordSubIds = [2384, 2385, 2386, 2387, 2388, 2389, 2390, 2391, 2392, 2393];
+            if (recordSubIds.includes(id)) {
+                const recordDetail = evaluationItems.find(i => i.id === 2383);
+                if (recordDetail) {
+                    const subItems = recordSubIds.map(subId => evaluationItems.find(i => i.id === subId)).filter(i => i);
+                    const answered = subItems.filter(i => i.eval_value !== null && i.eval_value !== undefined && i.eval_value !== '' && i.eval_value !== 'N/A');
+                    
+                    if (answered.length < 10) {
+                        recordDetail.eval_value = null;
+                        recordDetail.eval_comment = `하위 10개 기록 항목 중 ${answered.length}개 입력됨 (10개 모두 입력 시 자동 합산됨)`;
+                    } else {
+                        const values = subItems.map(i => parseFloat(i.eval_value) || 0);
+                        const sum = values.reduce((a, b) => a + b, 0);
+                        recordDetail.eval_value = String(sum);
+                        
+                        const hasZero = values.includes(0);
+                        if (hasZero) {
+                            recordDetail.eval_comment = `[자동 판정] 하위 10개 항목 합계: ${sum}점 (0점 항목 존재로 기록 불량 점수 반영)`;
+                        } else {
+                            recordDetail.eval_comment = `[자동 판정] 하위 10개 항목 합계: ${sum}점 (기록 보관 양호)`;
+                        }
+                    }
+                    
+                    // UI 실시간 업데이트
+                    const calcResultEl = document.getElementById('calc_result_2383');
+                    if (calcResultEl) {
+                        calcResultEl.innerHTML = recordDetail.eval_value === null 
+                            ? `<span style="color: #e53e3e;">입력 대기 (하위 10개 중 ${answered.length}개 입력됨)</span>` 
+                            : `${recordDetail.eval_value}점`;
+                    }
+                    
+                    const commEl = document.getElementById('off_comm_2383');
+                    if (commEl) {
+                        commEl.value = recordDetail.eval_comment || '';
+                    }
+                }
             }
         }
 
@@ -1247,7 +1340,7 @@
 
             // 특수 문항 측정값 개수 최종 재검증
             for (const item of evaluationItems) {
-                if (item.small_item === '조명' || item.small_item === '공기 오염도') {
+                if (item.small_item === '조명' || item.small_item === '온도') {
                     const list = (item.eval_measurements || []).filter(v => v !== '' && !isNaN(v));
                     if (list.length < 2) {
                         alert(`'${item.small_item}' 평가는 최소 2개 이상의 측정값을 입력해야 합니다.`);
@@ -1255,6 +1348,9 @@
                     }
                 }
                 if (item.section === '□ 소의 상태 평가') {
+                    if (item.id === 2459) {
+                        continue; // 원유 체세포수는 개체별 제출 검증에서 제외
+                    }
                     const firstItem = evaluationItems.find(i => i.section === '□ 소의 상태 평가');
                     const cowList = firstItem ? (firstItem.eval_cow_conditions || []) : [];
                     if (cowList.length < 2) {
@@ -1301,6 +1397,20 @@
                 
                 // 만약 평가자가 값을 선택하지 않고 생략했거나 'N/A'(해당사항없음)를 체크했다면 점수 계산에서 아예 제외
                 if (item.eval_value === null || item.eval_value === 'N/A') {
+                    return;
+                }
+
+                // 중복 반영 방지: 하위 10개 기록 항목(2384~2393)은 점수 합산에서 제외(2383 대항목에 합계 점수가 반영됨)
+                const recordSubIds = [2384, 2385, 2386, 2387, 2388, 2389, 2390, 2391, 2392, 2393];
+                if (recordSubIds.includes(item.id)) {
+                    return;
+                }
+                
+                // 2383번 항목은 DB에 적부로 세팅되어 있을 수 있으므로 점수 항목으로 수동 매핑(최대 10점)
+                if (item.id === 2383) {
+                    const earnedVal = parseFloat(item.eval_value) || 0;
+                    earnedPoints += earnedVal;
+                    maxPoints += 10;
                     return;
                 }
                 
