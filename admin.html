@@ -1760,6 +1760,14 @@
                 });
             }
             
+            // 이미 결합 병합되어 화면에서 사라진 하위 단독 문항(이수일, 병원/수의사, 검사일, 동결대비내용) 필터링 제거
+            normalizedDetails = normalizedDetails.filter(item => 
+                item.orig_id !== 2381 && 
+                item.orig_id !== 2400 && 
+                item.orig_id !== 2412 && 
+                item.orig_id !== 2414
+            );
+            
             // 3가지 기준 판정 로직 추가
             let groupA_earned = 0;
             let groupA_max = 0;
