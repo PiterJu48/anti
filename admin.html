@@ -1760,7 +1760,26 @@
                 });
             }
             
-            // 이미 결합 병합되어 화면에서 사라진 하위 단독 문항(이수일, 병원/수의사, 검사일, 동결대비내용) 필터링 제거
+            // 이미 결합 병합되어 화면에서 사라진 하위 단독 문항(이수일, 병원/수의사, 검사일, 동결대비내용) 필터링 제거 전, 상위 항목의 평가 의견에 값 병합
+            const pairs = [
+                { parentId: 2380, subId: 2381, label: '이수일' },
+                { parentId: 2399, subId: 2400, label: '병원 및 수의사' },
+                { parentId: 2411, subId: 2412, label: '검사일' },
+                { parentId: 2413, subId: 2414, label: '대비내용' }
+            ];
+            pairs.forEach(pair => {
+                const parent = normalizedDetails.find(i => i.orig_id === pair.parentId);
+                const sub = normalizedDetails.find(i => i.orig_id === pair.subId);
+                if (parent && sub && sub.comment && sub.comment.trim() !== '') {
+                    const subText = `(${pair.label}: ${sub.comment.trim()})`;
+                    if (!parent.comment) {
+                        parent.comment = subText;
+                    } else if (!parent.comment.includes(subText)) {
+                        parent.comment = parent.comment.trim() + " " + subText;
+                    }
+                }
+            });
+
             normalizedDetails = normalizedDetails.filter(item => 
                 item.orig_id !== 2381 && 
                 item.orig_id !== 2400 && 
@@ -3153,6 +3172,26 @@
 
             const details = report.details || {};
             const detailItems = Array.isArray(details) ? details : Object.keys(details).map(k => ({ orig_id: parseInt(k), ...details[k] }));
+
+            // 병합되어 숨겨질 하위 단독 문항(이수일, 병원/수의사, 검사일, 동결대비내용)의 비고 값을 상위 부모 항목의 비고에 자동 결합
+            const previewPairs = [
+                { parentId: 2380, subId: 2381, label: '이수일' },
+                { parentId: 2399, subId: 2400, label: '병원 및 수의사' },
+                { parentId: 2411, subId: 2412, label: '검사일' },
+                { parentId: 2413, subId: 2414, label: '대비내용' }
+            ];
+            previewPairs.forEach(pair => {
+                const parent = detailItems.find(i => i.orig_id === pair.parentId);
+                const sub = detailItems.find(i => i.orig_id === pair.subId);
+                if (parent && sub && sub.comment && sub.comment.trim() !== '') {
+                    const subText = `(${pair.label}: ${sub.comment.trim()})`;
+                    if (!parent.comment) {
+                        parent.comment = subText;
+                    } else if (!parent.comment.includes(subText)) {
+                        parent.comment = parent.comment.trim() + " " + subText;
+                    }
+                }
+            });
 
             // 3. 대/소항목 rowspan 계산
             const rowspans = [];
