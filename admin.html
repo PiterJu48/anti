@@ -1294,10 +1294,18 @@
 
         async function deleteFarm(id) {
             if (confirm('정말 삭제하시겠습니까? (이 농장과 관련된 평가 보고서 및 결과 데이터는 삭제되지 않고 보존됩니다.)')) {
-                // 연관된 evaluation_reports의 farm_id를 null로 업데이트하여 보고서 데이터를 보존하고 외래 키 충돌 예방
+                // 삭제 전에 농장 이름 구해두기
+                const { data: farmToDelete } = await db.from('farms').select('name').eq('id', id).single();
+                const originalFarmName = farmToDelete ? farmToDelete.name : '';
+
+                // 연관된 evaluation_reports의 farm_id를 null로 업데이트하여 보고서 데이터를 보존하고, 
+                // summary 필드에 원래 농장명을 백업 저장
                 const { error: reportError } = await db
                     .from('evaluation_reports')
-                    .update({ farm_id: null })
+                    .update({ 
+                        farm_id: null,
+                        summary: originalFarmName
+                    })
                     .eq('farm_id', id);
 
                 if (reportError) {
@@ -1642,7 +1650,7 @@
 
                 return `
                     <tr>
-                        <td>${report.farms ? report.farms.name : '알 수 없음'}</td>
+                        <td>${report.farms ? report.farms.name : (report.summary || '알 수 없음')}</td>
                         <td><span class="status-badge status-process" style="font-size: 0.75rem;">${auditType}</span></td>
                         <td>${getEvaluatorName(report.evaluator_id)}</td>
                         <td><span style="font-weight: bold; color: ${report.score >= 80 ? '#2c7a7b' : '#e53e3e'}">${report.score}점</span></td>
