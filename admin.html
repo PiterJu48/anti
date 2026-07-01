@@ -2964,6 +2964,34 @@
 
                 // 9. 수정된 XML 데이터를 다시 zip 파일에 덮어씀
                 const serializer = new XMLSerializer();
+                
+                // 수식 셀 캐시 제거하여 엑셀에서 강제로 새로 연산하도록 조치
+                const formulaCells = xmlDoc.querySelectorAll("c f");
+                formulaCells.forEach(fNode => {
+                    const cNode = fNode.parentNode;
+                    if (cNode) {
+                        const vNode = cNode.querySelector("v");
+                        if (vNode) {
+                            cNode.removeChild(vNode);
+                        }
+                    }
+                });
+
+                // workbook.xml에 fullCalcOnLoad 플래그를 세팅하여 로드 시 재연산 강제
+                const wbFile = zip.file("xl/workbook.xml");
+                if (wbFile) {
+                    const wbXmlText = await wbFile.async("text");
+                    const wbDoc = parser.parseFromString(wbXmlText, "application/xml");
+                    let calcPrNode = wbDoc.querySelector("calcPr");
+                    if (!calcPrNode) {
+                        calcPrNode = wbDoc.createElementNS("http://schemas.openxmlformats.org/spreadsheetml/2006/main", "calcPr");
+                        wbDoc.documentElement.appendChild(calcPrNode);
+                    }
+                    calcPrNode.setAttribute("fullCalcOnLoad", "1");
+                    calcPrNode.setAttribute("forceFullCalc", "1");
+                    zip.file("xl/workbook.xml", serializer.serializeToString(wbDoc));
+                }
+
                 const newSheetXmlText = serializer.serializeToString(xmlDoc);
                 zip.file("xl/worksheets/sheet1.xml", newSheetXmlText);
 
