@@ -383,8 +383,11 @@
                         isCompleted = farmReports.some(r => {
                             const reportCreatedAt = new Date(r.created_at);
                             if (evalDateLimit && !isNaN(evalDateLimit.getTime())) {
-                                if (reportCreatedAt.getTime() < evalDateLimit.getTime()) {
-                                    return false; // 이전 보고서
+                                // 당일 자정(날짜) 기준으로 정합 비교하여 예정 시간보다 몇 시간 일찍 제출한 경우도 완료 상태로 인정
+                                const reportDate = new Date(reportCreatedAt.getFullYear(), reportCreatedAt.getMonth(), reportCreatedAt.getDate());
+                                const limitDate = new Date(evalDateLimit.getFullYear(), evalDateLimit.getMonth(), evalDateLimit.getDate());
+                                if (reportDate.getTime() < limitDate.getTime()) {
+                                    return false; // 이전 차수 날짜 보고서
                                 }
                             }
                             return true;
