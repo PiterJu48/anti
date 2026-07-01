@@ -2838,13 +2838,11 @@
                         vNode.textContent = String(Number(val));
                         cellNode.appendChild(vNode);
                     } else {
-                        // 문자열은 inlineStr로 세팅하여 기존 shared string에 관계없이 삽입
-                        cellNode.setAttribute('t', 'inlineStr');
-                        const isNode = xmlDoc.createElementNS("http://schemas.openxmlformats.org/spreadsheetml/2006/main", 'is');
-                        const tNode = xmlDoc.createElementNS("http://schemas.openxmlformats.org/spreadsheetml/2006/main", 't');
-                        tNode.textContent = String(val);
-                        isNode.appendChild(tNode);
-                        cellNode.appendChild(isNode);
+                        // inlineStr 대신 t="str" (일반 문자열 셀) 형식을 사용하여 수식 계산 엔진(COUNTIF 등)과의 호환성 100% 보장
+                        cellNode.setAttribute('t', 'str');
+                        const vNode = xmlDoc.createElementNS("http://schemas.openxmlformats.org/spreadsheetml/2006/main", 'v');
+                        vNode.textContent = String(val);
+                        cellNode.appendChild(vNode);
                     }
                 }
 
