@@ -1157,7 +1157,7 @@
 
         // 농장 데이터 로드 (기존 로직 유지)
         async function fetchFarms() {
-            const { data, error } = await db.from('farms').select('*').order('created_at', { ascending: false });
+            const { data, error } = await db.from('farms').select('*').neq('name', '__SYSTEM_ACCOUNTS__').order('created_at', { ascending: false });
             if (error) return console.error(error);
             renderFarms(data);
         }
@@ -2413,7 +2413,7 @@
         async function fetchAuditTargets() {
             try {
                 // 모든 농장 정보 가져오기
-                const { data: farms, error: farmsError } = await db.from('farms').select('*').order('name', { ascending: true });
+                const { data: farms, error: farmsError } = await db.from('farms').select('*').neq('name', '__SYSTEM_ACCOUNTS__').order('name', { ascending: true });
                 if (farmsError) throw farmsError;
 
                 // 이미 완료된 평가 보고서 목록 가져오기 (실시간 상태 판별용)

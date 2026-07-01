@@ -287,7 +287,7 @@
         async function loadAssignedFarms() {
             try {
                 // 모든 농장 정보 가져오기
-                const { data: farms, error: farmsError } = await db.from('farms').select('*');
+                const { data: farms, error: farmsError } = await db.from('farms').select('*').neq('name', '__SYSTEM_ACCOUNTS__');
                 if (farmsError) throw farmsError;
 
                 // 이미 완료된 평가 보고서 목록 가져오기 (실시간 완료 필터링용)
@@ -426,7 +426,7 @@
 
         async function loadFarms() {
             try {
-                const { data, error } = await db.from('farms').select('*');
+                const { data, error } = await db.from('farms').select('*').neq('name', '__SYSTEM_ACCOUNTS__');
                 if (error) throw error;
                 
                 const select = document.getElementById('targetFarm');
