@@ -834,8 +834,8 @@
                             `;
                         }
 
-                        // 일반 문항 렌더링
-                        return group.items.map(item => {
+                        // 일반 문항 렌더링 (이수일 문항 2381은 화면에서 숨기고 2380 문항 내부에 입력폼을 위치시킴)
+                        return group.items.filter(item => item.id !== 2381).map(item => {
                             const isRecordAutoSumItem = item.id === 2383; // 기록 자동 합산 상위 문항
                             const options = parseOptions(item.compliance_criteria);
                             const hasParentheses = item.section && item.section.includes('(') && item.section.includes(')');
@@ -944,6 +944,21 @@
                                                 ` : ''}
                                             </div>
                                         `}
+                                        ${item.id === 2380 ? `
+                                            <div style="margin-bottom: 15px; width: 100%;">
+                                                <div style="font-weight: 600; font-size: 0.85rem; color: #4a5568; margin-bottom: 6px;">
+                                                    이수일 입력 (이수 선택 시 활성화, 입력 생략 가능)
+                                                </div>
+                                                <input type="date" id="edu_completion_date" 
+                                                    value="${(() => {
+                                                        const eduDateItem = evaluationItems.find(i => i.id === 2381);
+                                                        return (eduDateItem && eduDateItem.eval_comment) ? eduDateItem.eval_comment : '';
+                                                    })()}" 
+                                                    onchange="updateEduCompletionDate(this.value)" 
+                                                    style="width: 100%; padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 0.9rem;"
+                                                    ${item.eval_value === 'Y' ? '' : 'disabled'}>
+                                            </div>
+                                        ` : ''}
                                         <input type="text" id="off_comm_${item.id}" placeholder="평가 의견 입력" 
                                             value="${item.eval_comment || ''}" 
                                             ${(isOptionDisabled || isRecordAutoSumItem) ? 'readonly style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem; border-radius: 4px; background: #f1f5f9; color: #4a5568;"' : 'style="width: 100%; padding: 8px; border: 1px solid #eee; font-size: 0.85rem; border-radius: 4px;"'}
@@ -1252,6 +1267,20 @@
                 item.eval_value = value;
             }
 
+            // 2380번 문항 변경 시 이수일 입력창 활성/비활성 제어 및 값 동기화
+            if (id === 2380) {
+                const dateInput = document.getElementById('edu_completion_date');
+                if (dateInput) {
+                    if (value === 'Y') {
+                        dateInput.disabled = false;
+                    } else {
+                        dateInput.disabled = true;
+                        dateInput.value = '';
+                        updateEduCompletionDate('');
+                    }
+                }
+            }
+
             // 하위 10개 기록 항목(2384~2393) 중 하나가 변경되었다면 2383번 문항 자동 재연산
             const recordSubIds = [2384, 2385, 2386, 2387, 2388, 2389, 2390, 2391, 2392, 2393];
             if (recordSubIds.includes(id)) {
@@ -1289,6 +1318,15 @@
                         commEl.value = recordDetail.eval_comment || '';
                     }
                 }
+            }
+        }
+
+        // 이수일 입력값 업데이트 및 2381번 문항 메모리 상태에 동기화
+        function updateEduCompletionDate(val) {
+            const item = evaluationItems.find(i => i.id === 2381);
+            if (item) {
+                item.eval_value = val ? 'Y' : 'N';
+                item.eval_comment = val || ''; // eval_comment 필드에 날짜 저장
             }
         }
 
@@ -1367,6 +1405,7 @@
 
             // 미해결 문항 재검증 (추가 사항 항목은 필수 검증에서 제외)
             const uncompletedItems = evaluationItems.filter(i => {
+                if (i.id === 2381) return false; // 이수일 문항은 검증 생략
                 const isOptional = (i.section && i.section.includes('(추가 사항)')) || (i.large_item && i.large_item.includes('(추가 사항)'));
                 return i.eval_value === null && !isOptional;
             });

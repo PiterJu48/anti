@@ -2876,6 +2876,12 @@
                 }
                 updateCell('G3', report.summary || '의견 없음');
 
+                // C11 셀에 동물복지 교육 이수일 (ID: 2381 문항의 comment) 저장값 명시적 바인딩
+                const eduDateItem = detailItems.find(d => d.orig_id === 2381);
+                if (eduDateItem && eduDateItem.comment) {
+                    updateCell('C11', eduDateItem.comment);
+                }
+
                 // 7. 각 평가 항목 결과값 매핑 (6행~137행 순회하며 G열 업데이트)
                 function cleanText(str) {
                     if (!str) return '';
