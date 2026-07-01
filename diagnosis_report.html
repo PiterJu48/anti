@@ -489,11 +489,9 @@
                     if (isGroupA) {
                         groupA_earned += earnedVal;
                         groupA_max += maxVal;
-                        if (earnedVal !== maxVal) groupA_nonCompliant++;
                     } else if (isGroupB) {
                         groupB_earned += earnedVal;
                         groupB_max += maxVal;
-                        if (earnedVal !== maxVal) groupB_nonCompliant++;
                     }
                 } else {
                     const trimmedStatus = String(status).trim();
@@ -525,9 +523,10 @@
             const scoreB = groupB_earned;
 
             // 점수 기준을 충족하고 동시에 해당 그룹 내에 부적합(N) 문항이 0개여야 통과로 판정
+            // B그룹(소의 상태 평가)은 점수의 합계(25점 이상)만으로 통과 기준을 충족함 (부적합 개수 과락 조건에서 예외 처리)
             const isGroupAPass = scoreA >= 80 && groupA_nonCompliant === 0;
-            const isGroupBPass = scoreB >= 25 && groupB_nonCompliant === 0;
-            const isYNPass = (groupA_nonCompliant + groupB_nonCompliant) === 0;
+            const isGroupBPass = scoreB >= 25;
+            const isYNPass = groupA_nonCompliant === 0;
             const finalPassed = isGroupAPass && isGroupBPass && isYNPass;
 
             // 요약 테이블 바인딩
