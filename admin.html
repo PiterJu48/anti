@@ -3136,7 +3136,12 @@
             const inactiveKeywords = configError ? [] : configs.filter(c => !c.is_active).map(c => c.section_name);
             const cleanSect = s => s.replace(/[^가-힣a-zA-Z0-9]/g, '');
 
-            const sortedItems = sortEvaluationItems(evalItems);
+            const sortedItems = sortEvaluationItems(evalItems).filter(item => 
+                item.id !== 2381 && 
+                item.id !== 2400 && 
+                item.id !== 2412 && 
+                item.id !== 2414
+            );
 
             const details = report.details || {};
             const detailItems = Array.isArray(details) ? details : Object.keys(details).map(k => ({ orig_id: parseInt(k), ...details[k] }));
