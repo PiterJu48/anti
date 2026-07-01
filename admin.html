@@ -2547,13 +2547,16 @@
                             // 타임존 차이에 따른 시간 정렬 오차(KST vs UTC)를 방지하기 위해 getTime() 밀리초 값을 정확하게 비교
                             let isBeforeLimit = false;
                             if (evalDateLimit && !isNaN(evalDateLimit.getTime())) {
-                                // DB 생성 시간(UTC)을 로컬 타임존 기준으로 밀리초 변환하여 비교
-                                if (reportCreatedAt.getTime() < evalDateLimit.getTime()) {
+                                // 당일 평가일 경우 예정 시간보다 조금 일찍 완료될 수 있으므로, 동일 날짜이면 이전 보고서로 취급하지 않음 (날짜 기준 비교)
+                                const evalDateOnly = new Date(evalDateLimit.getFullYear(), evalDateLimit.getMonth(), evalDateLimit.getDate());
+                                const reportDateOnly = new Date(reportCreatedAt.getFullYear(), reportCreatedAt.getMonth(), reportCreatedAt.getDate());
+                                
+                                if (reportDateOnly.getTime() < evalDateOnly.getTime()) {
                                     isBeforeLimit = true;
                                 }
                             }
                             
-                            console.log(`[디버그] 농장: ${farm.name}, 보고서생성일: ${r.created_at} (${reportCreatedAt.toLocaleString()}), 심사한계일: ${remarksData.eval_date} (${evalDateLimit ? evalDateLimit.toLocaleString() : '없음'}), 한계일보다이전인가: ${isBeforeLimit}`);
+                            console.log(`[디버그] 농장: ${farm.name}, 보고서생성일: ${r.created_at} (${reportCreatedAt.toLocaleString()}), 심사예정일: ${remarksData.eval_date} (${evalDateLimit ? evalDateLimit.toLocaleString() : '없음'}), 예정일보다이전(과거날짜)인가: ${isBeforeLimit}`);
                             
                             if (isBeforeLimit) {
                                 return false; // 이전 심사의 보고서이므로 제외
