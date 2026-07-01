@@ -13,6 +13,16 @@ if (typeof supabase !== 'undefined') {
 const DUMMY_DOMAIN = '@animal-welfare.mafra.go.kr';
 
 /**
+ * UUID 생성 헬퍼 (DB의 profiles.id 타입이 UUID인 경우의 데이터 형식 위반 방지)
+ */
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+/**
  * 단순 ID를 이메일 형식으로 변환
  */
 function formatIdToEmail(userId) {
@@ -43,11 +53,11 @@ async function getUsers() {
 
         if (error) throw error;
 
-        // DB에 계정이 전혀 없으면 기본 계정 시딩(부트스트랩)
+        // DB에 계정이 전혀 없으면 기본 계정 시딩 (UUID id 생성, name에 id::name::pw 패키징)
         if (!data || data.length === 0) {
             const seedingData = DEFAULT_USERS.map(u => ({
-                id: u.id,
-                name: `${u.name}::${u.pw}`,
+                id: generateUUID(),
+                name: `${u.id}::${u.name}::${u.pw}`,
                 role: u.role
             }));
             await _supabase.from('profiles').insert(seedingData);
@@ -57,12 +67,23 @@ async function getUsers() {
 
         const mappedUsers = data.map(u => {
             const nameParts = (u.name || '').split('::');
-            return {
-                id: u.id,
-                pw: nameParts[1] || '1234',
-                name: nameParts[0] || u.name,
-                role: u.role
-            };
+            if (nameParts.length >= 3) {
+                return {
+                    id: nameParts[0],
+                    name: nameParts[1],
+                    pw: nameParts[2],
+                    role: u.role,
+                    uuid: u.id
+                };
+            } else {
+                return {
+                    id: u.id,
+                    name: nameParts[0] || u.name,
+                    pw: nameParts[1] || '1234',
+                    role: u.role,
+                    uuid: u.id
+                };
+            }
         });
 
         localStorage.setItem('app_users', JSON.stringify(mappedUsers));
@@ -101,11 +122,11 @@ const accountManager = {
         if (users.find(u => u.id === newUser.id)) throw new Error('이미 존재하는 아이디입니다.');
         
         if (_supabase) {
-            const dbName = `${newUser.name}::${newUser.pw}`;
+            const dbName = `${newUser.id}::${newUser.name}::${newUser.pw}`;
             const { error } = await _supabase
                 .from('profiles')
                 .insert({
-                    id: newUser.id,
+                    id: generateUUID(),
                     name: dbName,
                     role: newUser.role
                 });
@@ -115,26 +136,34 @@ const accountManager = {
     },
     update: async (id, updatedData) => {
         if (_supabase) {
-            const dbName = `${updatedData.name}::${updatedData.pw}`;
-            const { error } = await _supabase
-                .from('profiles')
-                .update({
-                    name: dbName,
-                    role: updatedData.role
-                })
-                .eq('id', id);
-            if (error) throw new Error('DB 수정 실패: ' + error.message);
+            const users = await getUsers();
+            const matched = users.find(u => u.id === id);
+            if (matched && matched.uuid) {
+                const dbName = `${updatedData.id}::${updatedData.name}::${updatedData.pw}`;
+                const { error } = await _supabase
+                    .from('profiles')
+                    .update({
+                        name: dbName,
+                        role: updatedData.role
+                    })
+                    .eq('id', matched.uuid);
+                if (error) throw new Error('DB 수정 실패: ' + error.message);
+            }
         }
         await getUsers();
     },
     delete: async (id) => {
         if (id === 'admin') throw new Error('관리자 계정은 삭제할 수 없습니다.');
         if (_supabase) {
-            const { error } = await _supabase
-                .from('profiles')
-                .delete()
-                .eq('id', id);
-            if (error) throw new Error('DB 삭제 실패: ' + error.message);
+            const users = await getUsers();
+            const matched = users.find(u => u.id === id);
+            if (matched && matched.uuid) {
+                const { error } = await _supabase
+                    .from('profiles')
+                    .delete()
+                    .eq('id', matched.uuid);
+                if (error) throw new Error('DB 삭제 실패: ' + error.message);
+            }
         }
         await getUsers();
     }
