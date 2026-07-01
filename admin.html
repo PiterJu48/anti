@@ -2439,22 +2439,26 @@
                     // 평가 예정일이 설정되어 있고, 오늘보다 과거인 경우 상태 체크
                     if (remarksData.eval_date) {
                         const evalDate = new Date(remarksData.eval_date);
-                        if (!isNaN(evalDate.getTime()) && evalDate < today) {
-                            // 해당 농장의 완료된 보고서가 있는지 확인
-                            const farmReports = (reports || []).filter(r => r.farm_id === farm.id);
-                            let hasCompletedReport = false;
-                            if (farmReports.length > 0) {
-                                hasCompletedReport = farmReports.some(r => {
-                                    const reportCreatedAt = new Date(r.created_at);
-                                    if (reportCreatedAt.getTime() >= evalDate.getTime()) {
-                                        return true; // 예정일 이후에 제출된 실제 완료 건이 있음
-                                    }
+                        if (!isNaN(evalDate.getTime())) {
+                            const evalDateStart = new Date(evalDate.getFullYear(), evalDate.getMonth(), evalDate.getDate());
+                            const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                            if (evalDateStart < todayStart) {
+                                // 해당 농장의 완료된 보고서가 있는지 확인
+                                const farmReports = (reports || []).filter(r => r.farm_id === farm.id);
+                                let hasCompletedReport = false;
+                                if (farmReports.length > 0) {
+                                    hasCompletedReport = farmReports.some(r => {
+                                        const reportCreatedAt = new Date(r.created_at);
+                                        if (reportCreatedAt.getTime() >= evalDate.getTime()) {
+                                            return true; // 예정일 이후에 제출된 실제 완료 건이 있음
+                                        }
+                                        return false;
+                                    });
+                                }
+                                // 날짜가 지났는데 평가 완료 건이 없으면(미실시/평가중 상태라면) 목록 및 대시보드 집계에서 필터링하여 제외
+                                if (!hasCompletedReport) {
                                     return false;
-                                });
-                            }
-                            // 날짜가 지났는데 평가 완료 건이 없으면(미실시/평가중 상태라면) 목록 및 대시보드 집계에서 필터링하여 제외
-                            if (!hasCompletedReport) {
-                                return false;
+                                }
                             }
                         }
                     }
