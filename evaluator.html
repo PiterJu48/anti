@@ -834,8 +834,8 @@
                             `;
                         }
 
-                        // 일반 문항 렌더링 (이수일 2381, 병원/수의사 2400, 검사일 2412 문항은 화면에서 숨기고 각각 상위문항 내부에 입력폼 배치)
-                        return group.items.filter(item => item.id !== 2381 && item.id !== 2400 && item.id !== 2412).map(item => {
+                        // 일반 문항 렌더링 (이수일 2381, 병원/수의사 2400, 검사일 2412, 대비내용 2414 문항은 화면에서 숨기고 각각 상위문항 내부에 입력폼 배치)
+                        return group.items.filter(item => item.id !== 2381 && item.id !== 2400 && item.id !== 2412 && item.id !== 2414).map(item => {
                             const isRecordAutoSumItem = item.id === 2383; // 기록 자동 합산 상위 문항
                             const options = parseOptions(item.compliance_criteria);
                             const hasParentheses = item.section && item.section.includes('(') && item.section.includes(')');
@@ -984,6 +984,20 @@
                                                         return (dateItem && dateItem.eval_comment) ? dateItem.eval_comment : '';
                                                     })()}" 
                                                     onchange="updateWaterCheckDate(this.value)" 
+                                                    style="width: 100%; padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 0.9rem;">
+                                            </div>
+                                        ` : ''}
+                                        ${item.id === 2413 ? `
+                                            <div style="margin-bottom: 15px; width: 100%;">
+                                                <div style="font-weight: 600; font-size: 0.85rem; color: #4a5568; margin-bottom: 6px;">
+                                                    대비내용 입력 (입력 생략 가능)
+                                                </div>
+                                                <input type="text" id="freeze_prevention_details" placeholder="대비내용 입력" 
+                                                    value="${(() => {
+                                                        const dateItem = evaluationItems.find(i => i.id === 2414);
+                                                        return (dateItem && dateItem.eval_comment) ? dateItem.eval_comment : '';
+                                                    })()}" 
+                                                    oninput="updateFreezeDetails(this.value)" 
                                                     style="width: 100%; padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 0.9rem;">
                                             </div>
                                         ` : ''}
@@ -1376,6 +1390,15 @@
             }
         }
 
+        // 겨울 급수 동결대비 내용 입력값 업데이트 및 2414번 문항 메모리 상태에 동기화
+        function updateFreezeDetails(val) {
+            const item = evaluationItems.find(i => i.id === 2414);
+            if (item) {
+                item.eval_value = val ? 'Y' : 'N';
+                item.eval_comment = val || ''; // eval_comment 필드에 내용 저장
+            }
+        }
+
         // 평가의견 작성 시 메모리 업데이트
         function saveItemComment(id, comment) {
             const item = evaluationItems.find(i => i.id === id);
@@ -1451,7 +1474,7 @@
 
             // 미해결 문항 재검증 (추가 사항 항목은 필수 검증에서 제외)
             const uncompletedItems = evaluationItems.filter(i => {
-                if (i.id === 2381 || i.id === 2400 || i.id === 2412) return false; // 이수일, 병원/수의사, 검사일 문항은 검증 생략 (입력 생략 가능)
+                if (i.id === 2381 || i.id === 2400 || i.id === 2412 || i.id === 2414) return false; // 이수일, 병원/수의사, 검사일, 대비내용 문항은 검증 생략 (입력 생략 가능)
                 const isOptional = (i.section && i.section.includes('(추가 사항)')) || (i.large_item && i.large_item.includes('(추가 사항)'));
                 return i.eval_value === null && !isOptional;
             });
