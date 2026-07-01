@@ -2909,8 +2909,8 @@
                     return String(str).replace(/[^가-힣a-zA-Z0-9]/g, '');
                 }
 
-                // 설명 및 대헤더 행 번호 리스트 (값 업데이트 대상 제외)
-                const skipRows = [6, 16, 61, 99, 109];
+                // 설명 및 대헤더 행 번호 리스트 (값 업데이트 대상 제외. 111행은 닭 사양 관련 잔재 텍스트 매칭 오작동 방지를 위해 스킵)
+                const skipRows = [6, 16, 61, 99, 109, 111];
 
                 // 예외적으로 매칭이 필요한 특수 행 번호와 DB 문항 ID 간 수동 매핑 규칙
                 // -1 값은 채우지 않는 단순 안내(판정 기준) 및 소 항목이 누락된 미사용 행을 의미함
@@ -2976,10 +2976,10 @@
                     }
                 }
 
-                // 8. 심사 정보 업데이트 (A122: 심사기간, A123: 심사원)
+                // 8. 심사 정보 업데이트 (B122: 심사기간, A123: 심사원)
                 const evalDate = new Date(report.created_at);
                 const dateStr = !isNaN(evalDate.getTime()) ? `${evalDate.getFullYear()}년 ${evalDate.getMonth() + 1}월 ${evalDate.getDate()}일` : '';
-                updateCell('A122', `인증심사기간 : ${dateStr}`);
+                updateCell('B122', `인증심사기간 : ${dateStr}`);
                 updateCell('A123', `인증심사원 : ${getEvaluatorName(report.evaluator_id)}`);
 
                 // 9. 수정된 XML 데이터를 다시 zip 파일에 덮어씀
