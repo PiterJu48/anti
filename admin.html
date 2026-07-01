@@ -2838,11 +2838,13 @@
                         vNode.textContent = String(Number(val));
                         cellNode.appendChild(vNode);
                     } else {
-                        // inlineStr 대신 t="str" (일반 문자열 셀) 형식을 사용하여 수식 계산 엔진(COUNTIF 등)과의 호환성 100% 보장
-                        cellNode.setAttribute('t', 'str');
-                        const vNode = xmlDoc.createElementNS("http://schemas.openxmlformats.org/spreadsheetml/2006/main", 'v');
-                        vNode.textContent = String(val);
-                        cellNode.appendChild(vNode);
+                        // 문자열은 inlineStr로 세팅하여 기존 shared string에 관계없이 삽입 (이 방식이 호환성에 가장 안전함)
+                        cellNode.setAttribute('t', 'inlineStr');
+                        const isNode = xmlDoc.createElementNS("http://schemas.openxmlformats.org/spreadsheetml/2006/main", 'is');
+                        const tNode = xmlDoc.createElementNS("http://schemas.openxmlformats.org/spreadsheetml/2006/main", 't');
+                        tNode.textContent = String(val);
+                        isNode.appendChild(tNode);
+                        cellNode.appendChild(isNode);
                     }
                 }
 
@@ -2963,19 +2965,7 @@
                 // 9. 수정된 XML 데이터를 다시 zip 파일에 덮어씀
                 const serializer = new XMLSerializer();
                 
-                // 수식 셀 캐시 제거하여 엑셀에서 강제로 새로 연산하도록 조치
-                const formulaCells = xmlDoc.querySelectorAll("c f");
-                formulaCells.forEach(fNode => {
-                    const cNode = fNode.parentNode;
-                    if (cNode) {
-                        const vNode = cNode.querySelector("v");
-                        if (vNode) {
-                            cNode.removeChild(vNode);
-                        }
-                    }
-                });
-
-                // workbook.xml에 fullCalcOnLoad 플래그를 세팅하여 로드 시 재연산 강제
+                // workbook.xml에 recalcId 및 강제 재계산 플래그를 세팅하여 로드 시 자동 연산 유발
                 const wbFile = zip.file("xl/workbook.xml");
                 if (wbFile) {
                     const wbXmlText = await wbFile.async("text");
@@ -2985,6 +2975,8 @@
                         calcPrNode = wbDoc.createElementNS("http://schemas.openxmlformats.org/spreadsheetml/2006/main", "calcPr");
                         wbDoc.documentElement.appendChild(calcPrNode);
                     }
+                    // 큰 임의의 recalcId 값을 지정해야 엑셀 엔진이 수식의 변경을 감지하고 전체 시트 재계산을 수행함
+                    calcPrNode.setAttribute("recalcId", "999999");
                     calcPrNode.setAttribute("fullCalcOnLoad", "1");
                     calcPrNode.setAttribute("forceFullCalc", "1");
                     zip.file("xl/workbook.xml", serializer.serializeToString(wbDoc));
