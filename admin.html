@@ -679,6 +679,8 @@
 
             // 섹션별 그룹화 (비활성 섹션 필터링)
             const grouped = sortedData.reduce((acc, item) => {
+                if (item.id === 2381) return acc; // 이수일 문항은 평가항목 목록 렌더링에서 완전 제외 (2380에 통합됨)
+
                 const itemSectClean = cleanSect(item.section || "");
                 const isInactive = inactiveKeywords.some(keyword => itemSectClean.includes(keyword));
                 if (isInactive) return acc;
