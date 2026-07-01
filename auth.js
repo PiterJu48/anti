@@ -30,37 +30,55 @@ const DEFAULT_USERS = [
 /**
  * 사용자 목록 가져오기
  */
-function getUsers() {
-    const users = localStorage.getItem('app_users');
-    if (!users) {
-        localStorage.setItem('app_users', JSON.stringify(DEFAULT_USERS));
-        return DEFAULT_USERS;
-    }
+async function getUsers() {
     try {
-        const parsed = JSON.parse(users);
-        if (!Array.isArray(parsed) || parsed.length === 0) {
+        if (!_supabase) {
+            const local = localStorage.getItem('app_users');
+            return local ? JSON.parse(local) : DEFAULT_USERS;
+        }
+
+        const { data, error } = await _supabase
+            .from('profiles')
+            .select('*');
+
+        if (error) throw error;
+
+        // DB에 계정이 전혀 없으면 기본 계정 시딩(부트스트랩)
+        if (!data || data.length === 0) {
+            const seedingData = DEFAULT_USERS.map(u => ({
+                id: u.id,
+                name: `${u.name}::${u.pw}`,
+                role: u.role
+            }));
+            await _supabase.from('profiles').insert(seedingData);
             localStorage.setItem('app_users', JSON.stringify(DEFAULT_USERS));
             return DEFAULT_USERS;
         }
-        return parsed;
-    } catch (e) {
-        localStorage.setItem('app_users', JSON.stringify(DEFAULT_USERS));
-        return DEFAULT_USERS;
-    }
-}
 
-/**
- * 사용자 저장하기
- */
-function saveUsers(users) {
-    localStorage.setItem('app_users', JSON.stringify(users));
+        const mappedUsers = data.map(u => {
+            const nameParts = (u.name || '').split('::');
+            return {
+                id: u.id,
+                pw: nameParts[1] || '1234',
+                name: nameParts[0] || u.name,
+                role: u.role
+            };
+        });
+
+        localStorage.setItem('app_users', JSON.stringify(mappedUsers));
+        return mappedUsers;
+    } catch (e) {
+        console.error('Error fetching users from DB:', e);
+        const local = localStorage.getItem('app_users');
+        return local ? JSON.parse(local) : DEFAULT_USERS;
+    }
 }
 
 /**
  * 로그인 기능 (로컬 데이터 기반)
  */
 async function login(userId, password) {
-    const users = getUsers();
+    const users = await getUsers();
     const user = users.find(u => u.id === userId && u.pw === password);
 
     if (user) {
@@ -74,29 +92,51 @@ async function login(userId, password) {
 }
 
 /**
- * 계정 추가/수정/삭제 기능
+ * 계정 추가/수정/삭제 기능 (Supabase DB 연동)
  */
 const accountManager = {
     getAll: getUsers,
-    add: (newUser) => {
-        const users = getUsers();
+    add: async (newUser) => {
+        const users = await getUsers();
         if (users.find(u => u.id === newUser.id)) throw new Error('이미 존재하는 아이디입니다.');
-        users.push(newUser);
-        saveUsers(users);
-    },
-    update: (id, updatedData) => {
-        const users = getUsers();
-        const index = users.findIndex(u => u.id === id);
-        if (index !== -1) {
-            users[index] = { ...users[index], ...updatedData };
-            saveUsers(users);
+        
+        if (_supabase) {
+            const dbName = `${newUser.name}::${newUser.pw}`;
+            const { error } = await _supabase
+                .from('profiles')
+                .insert({
+                    id: newUser.id,
+                    name: dbName,
+                    role: newUser.role
+                });
+            if (error) throw new Error('DB 저장 실패: ' + error.message);
         }
+        await getUsers(); // 갱신
     },
-    delete: (id) => {
+    update: async (id, updatedData) => {
+        if (_supabase) {
+            const dbName = `${updatedData.name}::${updatedData.pw}`;
+            const { error } = await _supabase
+                .from('profiles')
+                .update({
+                    name: dbName,
+                    role: updatedData.role
+                })
+                .eq('id', id);
+            if (error) throw new Error('DB 수정 실패: ' + error.message);
+        }
+        await getUsers();
+    },
+    delete: async (id) => {
         if (id === 'admin') throw new Error('관리자 계정은 삭제할 수 없습니다.');
-        const users = getUsers();
-        const filtered = users.filter(u => u.id !== id);
-        saveUsers(filtered);
+        if (_supabase) {
+            const { error } = await _supabase
+                .from('profiles')
+                .delete()
+                .eq('id', id);
+            if (error) throw new Error('DB 삭제 실패: ' + error.message);
+        }
+        await getUsers();
     }
 };
 

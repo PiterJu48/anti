@@ -1078,8 +1078,8 @@
 
 
         // 사용자 데이터 로드
-        function fetchUsers() {
-            const users = window.auth.accounts.getAll();
+        async function fetchUsers() {
+            const users = await window.auth.accounts.getAll();
             const list = document.getElementById('userList');
             list.innerHTML = users.map(user => `
                 <tr>
@@ -1106,8 +1106,8 @@
             document.getElementById('userModal').style.display = 'none';
         }
 
-        function editUser(id) {
-            const users = window.auth.accounts.getAll();
+        async function editUser(id) {
+            const users = await window.auth.accounts.getAll();
             const user = users.find(u => u.id === id);
             if (!user) return;
 
@@ -1121,18 +1121,18 @@
             document.getElementById('userModal').style.display = 'block';
         }
 
-        function deleteUser(id) {
+        async function deleteUser(id) {
             if (confirm('정말 삭제하시겠습니까?')) {
                 try {
-                    window.auth.accounts.delete(id);
-                    fetchUsers();
+                    await window.auth.accounts.delete(id);
+                    await fetchUsers();
                 } catch (e) {
                     alert(e.message);
                 }
             }
         }
 
-        document.getElementById('userForm').addEventListener('submit', (e) => {
+        document.getElementById('userForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const isEdit = document.getElementById('isEditUser').value === 'true';
             const userData = {
@@ -1144,11 +1144,11 @@
 
             try {
                 if (isEdit) {
-                    window.auth.accounts.update(userData.id, userData);
+                    await window.auth.accounts.update(userData.id, userData);
                 } else {
-                    window.auth.accounts.add(userData);
+                    await window.auth.accounts.add(userData);
                 }
-                fetchUsers();
+                await fetchUsers();
                 closeUserModal();
             } catch (e) {
                 alert(e.message);
@@ -1509,9 +1509,13 @@
         }
 
         function getEvaluatorName(evaluatorId) {
-            const users = window.auth.accounts.getAll();
-            const user = users.find(u => u.id === evaluatorId);
-            return user ? `${user.name} (${evaluatorId})` : evaluatorId;
+            const usersJson = localStorage.getItem('app_users');
+            if (usersJson) {
+                const users = JSON.parse(usersJson);
+                const user = users.find(u => u.id === evaluatorId);
+                if (user) return `${user.name} (${evaluatorId})`;
+            }
+            return evaluatorId;
         }
 
         function renderResults(results) {
