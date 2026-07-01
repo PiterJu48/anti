@@ -679,7 +679,7 @@
 
             // 섹션별 그룹화 (비활성 섹션 필터링)
             const grouped = sortedData.reduce((acc, item) => {
-                if (item.id === 2381 || item.id === 2400) return acc; // 이수일(2381) 및 병원/수의사(2400) 문항은 평가항목 목록 렌더링에서 완전 제외 (각각 상위문항에 통합됨)
+                if (item.id === 2381 || item.id === 2400 || item.id === 2412) return acc; // 이수일(2381), 병원/수의사(2400), 검사일(2412) 문항은 평가항목 목록 렌더링에서 완전 제외 (각각 상위문항에 통합됨)
 
                 const itemSectClean = cleanSect(item.section || "");
                 const isInactive = inactiveKeywords.some(keyword => itemSectClean.includes(keyword));
@@ -2888,6 +2888,12 @@
                 const vetInfoItem = detailItems.find(d => d.orig_id === 2400);
                 if (vetInfoItem && vetInfoItem.comment) {
                     updateCell('D34', vetInfoItem.comment);
+                }
+
+                // D46 셀에 수질 검사일 (ID: 2412 문항의 comment) 저장값 명시적 바인딩
+                const waterCheckItem = detailItems.find(d => d.orig_id === 2412);
+                if (waterCheckItem && waterCheckItem.comment) {
+                    updateCell('D46', waterCheckItem.comment);
                 }
 
                 // 7. 각 평가 항목 결과값 매핑 (6행~137행 순회하며 G열 업데이트)
