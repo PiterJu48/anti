@@ -1,8 +1,13 @@
 const SUPABASE_URL = 'https://worigkqyaitfhxrlqrww.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indvcmlna3F5YWl0Zmh4cmxxcnd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNzk2OTIsImV4cCI6MjA5MTk1NTY5Mn0.QMXM0wKxkEJAI6j5uqwe20wyWwvEHO2HEL8iTr9wKto';
 
-// Supabase 클라이언트 초기화
-const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Supabase 클라이언트 초기화 (CDN 미로딩 대비 방어 코드 적용)
+let _supabase = null;
+if (typeof supabase !== 'undefined') {
+    _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} else {
+    console.warn('Supabase CDN이 로드되지 않았습니다. 로컬 캐시로 로그인 절차를 진행합니다.');
+}
 
 // 도메인 (내부 처리용)
 const DUMMY_DOMAIN = '@animal-welfare.mafra.go.kr';
@@ -27,7 +32,21 @@ const DEFAULT_USERS = [
  */
 function getUsers() {
     const users = localStorage.getItem('app_users');
-    return users ? JSON.parse(users) : DEFAULT_USERS;
+    if (!users) {
+        localStorage.setItem('app_users', JSON.stringify(DEFAULT_USERS));
+        return DEFAULT_USERS;
+    }
+    try {
+        const parsed = JSON.parse(users);
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+            localStorage.setItem('app_users', JSON.stringify(DEFAULT_USERS));
+            return DEFAULT_USERS;
+        }
+        return parsed;
+    } catch (e) {
+        localStorage.setItem('app_users', JSON.stringify(DEFAULT_USERS));
+        return DEFAULT_USERS;
+    }
 }
 
 /**
