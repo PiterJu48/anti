@@ -2375,12 +2375,12 @@
                 const detail = window.editingReportDetailsMap[item.id];
                 if (!detail) continue;
 
-                // 필수 항목인데 미선택된 경우 체크
-                const isOptional = (item.section && item.section.includes('(추가 사항)')) || (item.large_item && item.large_item.includes('(추가 사항)'));
-                if ((detail.status === null || detail.status === undefined || detail.status === '') && !isOptional) {
-                    alert(`필수 항목인 '${item.standard}' 문항에 대한 평가 결과가 선택되지 않았습니다. 해당 대항목 필터로 이동해 마저 완료해 주세요.`);
-                    return;
-                }
+                // 필수 항목 미선택 시 저장 차단 로직 제거 (평가되어 있지 않아도 임시 저장 가능하도록 허용)
+                // const isOptional = (item.section && item.section.includes('(추가 사항)')) || (item.large_item && item.large_item.includes('(추가 사항)'));
+                // if ((detail.status === null || detail.status === undefined || detail.status === '') && !isOptional) {
+                //     alert(`필수 항목인 '${item.standard}' 문항에 대한 평가 결과가 선택되지 않았습니다. 해당 대항목 필터로 이동해 마저 완료해 주세요.`);
+                //     return;
+                // }
 
                 details.push({
                     orig_id: detail.orig_id,
