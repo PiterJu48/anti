@@ -69,7 +69,20 @@ async function getUsers() {
         }
 
         const systemRecord = data[0];
-        const usersList = systemRecord.remarks ? JSON.parse(systemRecord.remarks) : DEFAULT_USERS;
+        let usersList = [];
+        try {
+            usersList = systemRecord.remarks ? JSON.parse(systemRecord.remarks) : [];
+        } catch (e) {
+            usersList = [];
+        }
+
+        if (!Array.isArray(usersList) || usersList.length === 0) {
+            usersList = DEFAULT_USERS;
+            await _supabase
+                .from('farms')
+                .update({ remarks: JSON.stringify(DEFAULT_USERS) })
+                .eq('name', '__SYSTEM_ACCOUNTS__');
+        }
 
         localStorage.setItem('app_users', JSON.stringify(usersList));
         return usersList;
