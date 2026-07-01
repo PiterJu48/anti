@@ -2979,7 +2979,7 @@
                 // 8. 심사 정보 업데이트 (B122: 심사기간, A123: 심사원)
                 const evalDate = new Date(report.created_at);
                 const dateStr = !isNaN(evalDate.getTime()) ? `${evalDate.getFullYear()}년 ${evalDate.getMonth() + 1}월 ${evalDate.getDate()}일` : '';
-                updateCell('B122', `인증심사기간 : ${dateStr}`);
+                updateCell('B122', dateStr);
                 updateCell('A123', `인증심사원 : ${getEvaluatorName(report.evaluator_id)}`);
 
                 // 9. 수정된 XML 데이터를 다시 zip 파일에 덮어씀
