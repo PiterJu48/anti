@@ -48,48 +48,33 @@ async function getUsers() {
         }
 
         const { data, error } = await _supabase
-            .from('profiles')
-            .select('*');
+            .from('farms')
+            .select('*')
+            .eq('name', '__SYSTEM_ACCOUNTS__');
 
         if (error) throw error;
 
-        // DB에 계정이 전혀 없으면 기본 계정 시딩 (UUID id 생성, name에 id::name::pw 패키징)
+        // DB에 계정용 더미 레코드가 전혀 없으면 신규 생성
         if (!data || data.length === 0) {
-            const seedingData = DEFAULT_USERS.map(u => ({
-                id: generateUUID(),
-                name: `${u.id}::${u.name}::${u.pw}`,
-                role: u.role
-            }));
-            await _supabase.from('profiles').insert(seedingData);
+            const seedingData = {
+                name: '__SYSTEM_ACCOUNTS__',
+                representative: 'SYSTEM',
+                address: 'SYSTEM',
+                phone_number: 'SYSTEM',
+                remarks: JSON.stringify(DEFAULT_USERS)
+            };
+            await _supabase.from('farms').insert(seedingData);
             localStorage.setItem('app_users', JSON.stringify(DEFAULT_USERS));
             return DEFAULT_USERS;
         }
 
-        const mappedUsers = data.map(u => {
-            const nameParts = (u.name || '').split('::');
-            if (nameParts.length >= 3) {
-                return {
-                    id: nameParts[0],
-                    name: nameParts[1],
-                    pw: nameParts[2],
-                    role: u.role,
-                    uuid: u.id
-                };
-            } else {
-                return {
-                    id: u.id,
-                    name: nameParts[0] || u.name,
-                    pw: nameParts[1] || '1234',
-                    role: u.role,
-                    uuid: u.id
-                };
-            }
-        });
+        const systemRecord = data[0];
+        const usersList = systemRecord.remarks ? JSON.parse(systemRecord.remarks) : DEFAULT_USERS;
 
-        localStorage.setItem('app_users', JSON.stringify(mappedUsers));
-        return mappedUsers;
+        localStorage.setItem('app_users', JSON.stringify(usersList));
+        return usersList;
     } catch (e) {
-        console.error('Error fetching users from DB:', e);
+        console.error('Error fetching users from DB (via farms config):', e);
         const local = localStorage.getItem('app_users');
         return local ? JSON.parse(local) : DEFAULT_USERS;
     }
@@ -121,32 +106,28 @@ const accountManager = {
         const users = await getUsers();
         if (users.find(u => u.id === newUser.id)) throw new Error('이미 존재하는 아이디입니다.');
         
+        users.push(newUser);
+        
         if (_supabase) {
-            const dbName = `${newUser.id}::${newUser.name}::${newUser.pw}`;
             const { error } = await _supabase
-                .from('profiles')
-                .insert({
-                    id: generateUUID(),
-                    name: dbName,
-                    role: newUser.role
-                });
+                .from('farms')
+                .update({ remarks: JSON.stringify(users) })
+                .eq('name', '__SYSTEM_ACCOUNTS__');
             if (error) throw new Error('DB 저장 실패: ' + error.message);
         }
         await getUsers(); // 갱신
     },
     update: async (id, updatedData) => {
-        if (_supabase) {
-            const users = await getUsers();
-            const matched = users.find(u => u.id === id);
-            if (matched && matched.uuid) {
-                const dbName = `${updatedData.id}::${updatedData.name}::${updatedData.pw}`;
+        const users = await getUsers();
+        const index = users.findIndex(u => u.id === id);
+        if (index !== -1) {
+            users[index] = { ...users[index], ...updatedData };
+            
+            if (_supabase) {
                 const { error } = await _supabase
-                    .from('profiles')
-                    .update({
-                        name: dbName,
-                        role: updatedData.role
-                    })
-                    .eq('id', matched.uuid);
+                    .from('farms')
+                    .update({ remarks: JSON.stringify(users) })
+                    .eq('name', '__SYSTEM_ACCOUNTS__');
                 if (error) throw new Error('DB 수정 실패: ' + error.message);
             }
         }
@@ -154,16 +135,15 @@ const accountManager = {
     },
     delete: async (id) => {
         if (id === 'admin') throw new Error('관리자 계정은 삭제할 수 없습니다.');
+        const users = await getUsers();
+        const filtered = users.filter(u => u.id !== id);
+        
         if (_supabase) {
-            const users = await getUsers();
-            const matched = users.find(u => u.id === id);
-            if (matched && matched.uuid) {
-                const { error } = await _supabase
-                    .from('profiles')
-                    .delete()
-                    .eq('id', matched.uuid);
-                if (error) throw new Error('DB 삭제 실패: ' + error.message);
-            }
+            const { error } = await _supabase
+                .from('farms')
+                .update({ remarks: JSON.stringify(filtered) })
+                .eq('name', '__SYSTEM_ACCOUNTS__');
+            if (error) throw new Error('DB 삭제 실패: ' + error.message);
         }
         await getUsers();
     }
